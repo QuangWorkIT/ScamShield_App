@@ -2,7 +2,7 @@
 
 -- 1. Xóa sạch dữ liệu cũ (Xóa cẩn thận theo thứ tự để không dính Foreign Key)
 TRUNCATE TABLE 
-    audit_logs, official_scam_warnings, quiz_answers, quiz_questions, quizzes, education_articles, 
+    audit_logs, official_scam_warnings, education_articles, 
     warning_cards, partner_official_alerts, notifications, user_alert_subscriptions, abuse_flags, 
     dispute_evidence, disputes, moderation_actions, report_evidence, reports, rule_definitions, 
     extracted_iocs, check_requests, whitelist_entries, partner_profiles, confirmed_indicators, 
@@ -137,18 +137,6 @@ INSERT INTO warning_cards (created_by_user_id, check_verdict_id, created_at) VAL
 INSERT INTO education_articles (title, slug, content, status, created_at, updated_at) VALUES
 ('Cách nhận biết lừa đảo qua điện thoại', 'cach-nhan-biet-lua-dao-dien-thoai', 'Đừng vội tin người xưng là công an...', 'PUBLISHED', NOW(), NOW());
 
--- 30. quizzes
-INSERT INTO quizzes (title, status, created_at) VALUES
-('Bài kiểm tra kỹ năng nhận diện lừa đảo', 'PUBLISHED', NOW());
-
--- 31. quiz_questions
-INSERT INTO quiz_questions (quiz_id, question, created_at) VALUES
-((SELECT id FROM quizzes LIMIT 1), 'Dấu hiệu nào sau đây là của kẻ lừa đảo giả danh công an?', NOW());
-
--- 32. quiz_answers
-INSERT INTO quiz_answers (question_id, answer_text, is_correct) VALUES
-((SELECT id FROM quiz_questions LIMIT 1), 'Yêu cầu chuyển tiền vào tài khoản cá nhân để "bảo đảm"', true),
-((SELECT id FROM quiz_questions LIMIT 1), 'Gọi điện thoại mời lên đồn làm việc', false);
 
 -- 33. official_scam_warnings
 INSERT INTO official_scam_warnings (title, content, status, created_at) VALUES
