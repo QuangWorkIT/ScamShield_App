@@ -1,3 +1,3 @@
 export default function GuestCheckPage() {
-  return <div>This is guest check page</div>
+  return <p>This is guest check page</p>
 }

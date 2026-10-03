@@ -1,3 +1,3 @@
 export default function GuestHomePage() {
-  return <div>This is Guest home page</div>
+  return <p>This is guest home page</p>
 }
