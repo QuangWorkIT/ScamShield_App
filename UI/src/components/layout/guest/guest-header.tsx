@@ -13,7 +13,7 @@ export function GuestHeader() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#C6C6CE]/30 bg-white/90 backdrop-blur-md dark:border-border dark:bg-background/90">
-      <div className="mx-auto flex h-18 max-w-8xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="max-w-8xl mx-auto flex h-18 items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Left: Brand & Main Navigation */}
         <div className="flex items-center gap-6">
           <Link href="/guest" className="group flex items-center gap-2.5">

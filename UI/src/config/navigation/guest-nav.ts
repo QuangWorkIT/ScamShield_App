@@ -25,5 +25,5 @@ export const GUEST_NAV_ITEMS: NavItem[] = [
   {
     title: "Bảng vinh danh",
     href: "/guest/leaderboard",
-  }
+  },
 ]

@@ -23,7 +23,7 @@ export function RoleSwitcher() {
   const setUser = useAuthStore((state) => state.setUser)
 
   return (
-    <div className="fixed top-50 left-5 z-50 flex items-center gap-2 rounded-md border bg-background p-2 text-xs shadow-md">
+    <div className="fixed top-50 right-5 z-50 flex items-center gap-2 rounded-md border bg-background p-2 text-xs shadow-md">
       <span>Current User: {currentUser?.userId ?? "none"}</span>
       <NativeSelect
         size="sm"
