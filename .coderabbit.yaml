@@ -1,0 +1,181 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit configuration for ScamShield (monorepo)
+#   - Server/scamshield-backend : Spring Boot 4 / Java 21 / JPA / PostgreSQL
+#   - UI                        : Next.js 16 (App Router) / React 19 / TypeScript / Tailwind 4
+# Reference: https://docs.coderabbit.ai/reference/configuration
+
+language: "en-US"
+tone_instructions: "Act as a senior engineer mentoring a student team. Be encouraging, professional and concise. Explain the why behind each suggestion and prefer small, actionable fixes."
+early_access: false
+
+reviews:
+  profile: "chill" # quiet | chill | assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  review_details: false
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: true
+  auto_apply_labels: false
+  suggested_reviewers: true
+  poem: true
+
+  labeling_instructions:
+    - label: "backend"
+      instructions: "Apply when the PR changes files under Server/."
+    - label: "frontend"
+      instructions: "Apply when the PR changes files under UI/."
+    - label: "database"
+      instructions: "Apply when the PR changes JPA entities, repositories, SQL scripts or DB configuration."
+    - label: "security"
+      instructions: "Apply when the PR touches authentication, authorization, secrets, input validation or CORS."
+
+  # Skip generated / vendored files
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/.next/**"
+    - "!**/target/**"
+    - "!**/build/**"
+    - "!**/dist/**"
+    - "!**/package-lock.json"
+    - "!**/.mvn/**"
+    - "!**/mvnw"
+    - "!**/mvnw.cmd"
+    - "!**/*.min.js"
+    - "!**/public/**/*.{png,jpg,jpeg,gif,ico,svg,webp}"
+
+  path_instructions:
+    # ---------- Backend: Spring Boot ----------
+    - path: "Server/**/*.java"
+      instructions: |
+        Review as a senior Java 21 / Spring Boot 4 developer.
+        - Prefer constructor injection (final fields + @RequiredArgsConstructor) over field @Autowired.
+        - Check correct use of stereotypes: @RestController, @Service, @Repository, @Configuration.
+        - Keep layering clean: controller -> service (interface + impl) -> repository. No business logic in controllers, no repository calls from controllers.
+        - Never expose JPA entities directly in API responses; use DTOs (Java records preferred).
+        - Validate request bodies with @Valid and Jakarta Bean Validation annotations.
+        - Use a global @RestControllerAdvice for exception handling; return consistent error responses and proper HTTP status codes.
+        - Use SLF4J logging (Lombok @Slf4j); never log passwords, tokens or personal data.
+        - Use @Transactional at the service layer where needed; readOnly = true for queries.
+        - Watch for N+1 queries, missing pagination on list endpoints, and EAGER fetching.
+        - Flag SQL injection risks in native/JPQL queries built with string concatenation.
+        - Document endpoints with springdoc-openapi annotations where useful.
+    - path: "Server/**/src/test/**/*.java"
+      instructions: |
+        - Use JUnit 5 + Mockito / Spring test slices (@WebMvcTest, @DataJpaTest) instead of full @SpringBootTest when possible.
+        - Tests should have clear given/when/then structure and meaningful assertions.
+    - path: "Server/**/src/main/resources/**/*.{yml,yaml,properties}"
+      instructions: |
+        - Flag hard-coded secrets, passwords, API keys or DB credentials; they must come from environment variables.
+        - Check that profile-specific config (dev/prod) is separated properly.
+    - path: "Server/**/{Dockerfile,docker-compose.yml}"
+      instructions: |
+        - Prefer multi-stage builds, a non-root user, and pinned base image versions.
+        - No secrets in the image or compose file; use env files / environment variables.
+
+    # ---------- Frontend: Next.js ----------
+    - path: "UI/src/**/*.{ts,tsx}"
+      instructions: |
+        Review as a senior Next.js 16 (App Router) / React 19 / TypeScript developer.
+        - Default to Server Components; only add "use client" when hooks, state, effects or browser APIs are needed. Keep client components small.
+        - Avoid `any`; use explicit types/interfaces and shared types from src/types.
+        - Respect the project structure: route groups in src/app/(role)/..., shared UI in src/components, feature logic in src/features/<feature>/{hooks,schemas,services}.
+        - Use next/link for navigation and next/image for images.
+        - Handle loading, empty and error states (loading.tsx / error.tsx or explicit UI states).
+        - Check accessibility: semantic HTML, alt text, labels for inputs, keyboard navigation, aria attributes.
+        - Use the `cn` utility and Tailwind classes consistently; avoid inline styles.
+        - Zustand stores should stay minimal and must not persist sensitive data (e.g. tokens) in localStorage.
+        - Never expose secrets in client code; only NEXT_PUBLIC_* env vars are allowed on the client.
+        - Watch for unnecessary re-renders, missing keys in lists, and incorrect useEffect dependencies.
+    - path: "UI/src/app/**/page.tsx"
+      instructions: |
+        - Each page should export proper metadata (title/description) for SEO when applicable.
+        - Pages should compose feature components rather than contain large amounts of logic.
+    - path: "UI/src/components/ui/**"
+      instructions: |
+        - These are shadcn/base-ui primitives. Only flag real bugs or accessibility issues; avoid stylistic nitpicks.
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: true # Review PRs even if created as draft
+    auto_pause_after_reviewed_commits: 0 # Disable pausing after 5 commits; review every push
+    base_branches:
+      - "dev"
+      - "main"
+      - "develop"
+      - "release/.*"
+    ignore_title_keywords: []
+
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+
+  pre_merge_checks:
+    title:
+      mode: "warning"
+      requirements: "Use Conventional Commits style, e.g. 'feat(ui): add login page' or 'fix(api): handle null user'. Keep it under 72 characters."
+    description:
+      mode: "warning"
+    docstrings:
+      mode: "off"
+    issue_assessment:
+      mode: "warning"
+
+  tools:
+    # Frontend
+    eslint:
+      enabled: true
+    biome:
+      enabled: false # project uses ESLint + Prettier; avoid duplicate/conflicting lint comments
+    reactDoctor:
+      enabled: true
+    stylelint:
+      enabled: true
+    # Backend
+    pmd:
+      enabled: true
+    # Security / general
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    osvScanner:
+      enabled: true
+    hadolint:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    github-checks:
+      enabled: true
+
+chat:
+  auto_reply: true
+  art: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    # UI/AGENTS.md and UI/CLAUDE.md are picked up automatically by default patterns
+    filePatterns:
+      - "**/AGENTS.md"
+      - "**/CLAUDE.md"
+      - "**/CONTRIBUTING.md"
+  learnings:
+    scope: "auto"
+  pull_requests:
+    scope: "auto"
