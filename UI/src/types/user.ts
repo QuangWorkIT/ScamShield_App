@@ -1,6 +1,6 @@
-const role = ["admin", "user", "moderator", "guest"] as const
+export const USER_ROLES = ["admin", "user", "moderator", "guest"] as const
 
-export type UserRole = (typeof role)[number]
+export type UserRole = (typeof USER_ROLES)[number]
 
 export interface User {
   userId: string
