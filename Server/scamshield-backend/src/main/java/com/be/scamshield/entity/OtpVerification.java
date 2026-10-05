@@ -31,4 +31,11 @@ public class OtpVerification {
 
     @Column(name = "is_verified", nullable = false)
     private boolean isVerified;
+
+    @Column(name = "failed_attempts", nullable = false)
+    @Builder.Default
+    private int failedAttempts = 0;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
 }

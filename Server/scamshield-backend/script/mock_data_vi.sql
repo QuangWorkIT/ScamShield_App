@@ -31,10 +31,11 @@ INSERT INTO scam_categories (code, name, description, version, is_active, create
 ('GIA_DANH_CQCN', 'Giả danh cơ quan nhà nước', 'Giả công an, tòa án dọa bắt giam', 1, true, NOW(), NOW());
 
 -- 4. users
+-- LƯU Ý: Mật khẩu của tất cả user dưới đây đều là: Scam12345 (đã được băm bằng BCrypt)
 INSERT INTO users (full_name, phone_number, email, password_hash, role_id, reputation_rank_id, status, reputation_points, created_at, updated_at) VALUES
-('Nguyễn Văn A', '0987654321', 'nguyenvana@gmail.com', 'pwd_123', (SELECT id FROM roles WHERE name='REGISTERED_USER'), (SELECT id FROM reputation_ranks WHERE name='Hiệp Sĩ'), 'ACTIVE', 150, NOW(), NOW()),
-('Admin ScamShield', '0988888888', 'admin@scamshield.vn', 'pwd_admin', (SELECT id FROM roles WHERE name='ADMINISTRATOR'), (SELECT id FROM reputation_ranks WHERE name='Thủ Lĩnh'), 'ACTIVE', 9999, NOW(), NOW()),
-('Shopee Partner', '19001234', 'partner@shopee.vn', 'pwd_partner', (SELECT id FROM roles WHERE name='BUSINESS_PARTNER'), null, 'ACTIVE', 0, NOW(), NOW());
+('Nguyễn Văn A', '0987654321', 'nguyenvana@gmail.com', '$2a$10$.aK7Sz9/7Zsy9yzJHyTc3OFychCaGfhzAUDqL/9UVvHjlVtr7hYHa', (SELECT id FROM roles WHERE name='REGISTERED_USER'), (SELECT id FROM reputation_ranks WHERE name='Hiệp Sĩ'), 'ACTIVE', 150, NOW(), NOW()),
+('Admin ScamShield', '0988888888', 'admin@scamshield.vn', '$2a$10$.aK7Sz9/7Zsy9yzJHyTc3OFychCaGfhzAUDqL/9UVvHjlVtr7hYHa', (SELECT id FROM roles WHERE name='ADMINISTRATOR'), (SELECT id FROM reputation_ranks WHERE name='Thủ Lĩnh'), 'ACTIVE', 9999, NOW(), NOW()),
+('Shopee Partner', '19001234', 'partner@shopee.vn', '$2a$10$.aK7Sz9/7Zsy9yzJHyTc3OFychCaGfhzAUDqL/9UVvHjlVtr7hYHa', (SELECT id FROM roles WHERE name='BUSINESS_PARTNER'), null, 'ACTIVE', 0, NOW(), NOW());
 
 -- 5. refresh_tokens
 INSERT INTO refresh_tokens (user_id, token_hash, created_at, expires_at) VALUES
