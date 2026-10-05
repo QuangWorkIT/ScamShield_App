@@ -43,3 +43,11 @@ Please adhere strictly to the following rules for all code generation, refactori
 - Ensure that the `.env` file is placed in the correct root directory of the backend project (`Server/scamshield-backend/`) so that `spring-dotenv` can read it automatically.
 
 Follow these rules unconditionally whenever generating code for this workspace.
+
+## 9. Clean up temporary files
+- ALWAYS delete any temporary scripts, scratchpad code, or temporary test files (like `HashGenTest.java`) immediately after they have served their purpose.
+- NEVER leave `.idea`, `.vscode`, or other IDE-specific auto-generated folders cluttering the workspace if they were generated during AI tool executions. Remove them cleanly.
+
+## 10. Code Style & Imports
+- ALWAYS import classes and annotations properly at the top of the file using standard `import` statements (e.g. `import io.swagger.v3.oas.annotations.Operation;`).
+- NEVER use fully qualified class names inline within the code (e.g. avoid `@io.swagger.v3.oas.annotations.Operation(...)`) unless there is an unavoidable naming collision.
