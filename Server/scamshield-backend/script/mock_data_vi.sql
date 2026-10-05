@@ -30,10 +30,10 @@ INSERT INTO scam_categories (code, name, description, version, is_active, create
 ('GIA_DANH_CQCN', 'Giả danh cơ quan nhà nước', 'Giả công an, tòa án dọa bắt giam', 1, true, NOW(), NOW());
 
 -- 4. users
-INSERT INTO users (username, email, password_hash, role_id, reputation_rank_id, status, reputation_points, created_at, updated_at) VALUES
-('nguyenvana', 'nguyenvana@gmail.com', 'pwd_123', (SELECT id FROM roles WHERE name='REGISTERED_USER'), (SELECT id FROM reputation_ranks WHERE name='Hiệp Sĩ'), 'ACTIVE', 150, NOW(), NOW()),
-('admin_scamshield', 'admin@scamshield.vn', 'pwd_admin', (SELECT id FROM roles WHERE name='ADMINISTRATOR'), (SELECT id FROM reputation_ranks WHERE name='Thủ Lĩnh'), 'ACTIVE', 9999, NOW(), NOW()),
-('shopee_partner', 'partner@shopee.vn', 'pwd_partner', (SELECT id FROM roles WHERE name='BUSINESS_PARTNER'), null, 'ACTIVE', 0, NOW(), NOW());
+INSERT INTO users (username, email, password_hash, phone_number, is_phone_verified, role_id, reputation_rank_id, status, reputation_points, created_at, updated_at) VALUES
+('nguyenvana', 'nguyenvana@gmail.com', '$2a$10$KjgQ5SG4mGFr37olOMAkxu4F4ekYORUUEleshwHskaOakgnZ.edu2', '+84912345678', true, (SELECT id FROM roles WHERE name='REGISTERED_USER'), (SELECT id FROM reputation_ranks WHERE name='Hiệp Sĩ'), 'ACTIVE', 150, NOW(), NOW()),
+('admin_scamshield', 'admin@scamshield.vn', '$2a$10$KjgQ5SG4mGFr37olOMAkxu4F4ekYORUUEleshwHskaOakgnZ.edu2', '+84900000000', true, (SELECT id FROM roles WHERE name='ADMINISTRATOR'), (SELECT id FROM reputation_ranks WHERE name='Thủ Lĩnh'), 'ACTIVE', 9999, NOW(), NOW()),
+('shopee_partner', 'partner@shopee.vn', '$2a$10$KjgQ5SG4mGFr37olOMAkxu4F4ekYORUUEleshwHskaOakgnZ.edu2', '+84911111111', false, (SELECT id FROM roles WHERE name='BUSINESS_PARTNER'), null, 'ACTIVE', 0, NOW(), NOW());
 
 -- 5. refresh_tokens
 INSERT INTO refresh_tokens (user_id, token_hash, created_at, expires_at) VALUES
