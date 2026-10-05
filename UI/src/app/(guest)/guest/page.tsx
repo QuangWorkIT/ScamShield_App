@@ -1,3 +1,5 @@
+import GuestCheckPage from "./check/page"
+
 export default function GuestHomePage() {
-  return <p>This is guest home page</p>
+  return <GuestCheckPage />
 }
