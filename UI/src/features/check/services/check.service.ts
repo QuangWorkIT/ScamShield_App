@@ -44,28 +44,8 @@ export const MOCK_HIGH_RISK_RESULT: CheckScanResponse = {
 }
 
 export async function checkScamContent(
-  payload: CheckScanRequest
+  _payload?: CheckScanRequest
 ): Promise<CheckScanResponse> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL
-
-  if (apiUrl) {
-    try {
-      const res = await fetch(`${apiUrl}/api/v1/scan`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
-      if (res.ok) {
-        return (await res.json()) as CheckScanResponse
-      }
-    } catch {
-      // Fallback to mock on error
-    }
-  }
-
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 600))
+  await new Promise((resolve) => setTimeout(resolve, 400))
   return MOCK_HIGH_RISK_RESULT
 }
