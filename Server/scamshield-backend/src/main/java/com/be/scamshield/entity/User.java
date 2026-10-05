@@ -16,8 +16,11 @@ public class User {
     @Column(name = "id")
     private Long id;
 
-    @Column(name = "username", unique = true, nullable = false)
-    private String username;
+    @Column(name = "full_name", nullable = false)
+    private String fullName;
+
+    @Column(name = "phone_number", unique = true, nullable = false)
+    private String phoneNumber;
 
     @Column(name = "email", unique = true, nullable = false)
     private String email;
