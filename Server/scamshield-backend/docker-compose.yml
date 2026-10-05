@@ -31,8 +31,8 @@ services:
   mock-data-seeder:
     image: postgres:16-alpine
     depends_on:
-      - scamshield-api
       - scamshield-db
+      # - scamshield-api
     volumes:
       - ./script/mock_data_vi.sql:/mock.sql
     # Wait for API to start and generate tables (20 seconds), then insert mock data

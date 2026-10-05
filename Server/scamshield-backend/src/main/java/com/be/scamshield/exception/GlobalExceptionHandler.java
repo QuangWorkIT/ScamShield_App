@@ -48,10 +48,28 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<BaseResponse<Map<String, String>>> handleConstraintViolation(jakarta.validation.ConstraintViolationException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getConstraintViolations().forEach(cv -> {
+            String propertyPath = cv.getPropertyPath().toString();
+            String field = propertyPath.substring(propertyPath.lastIndexOf('.') + 1);
+            errors.put(field, cv.getMessage());
+        });
+        BaseResponse<Map<String, String>> response = new BaseResponse<>(false, "Validation Error", errors);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<BaseResponse<Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        BaseResponse<Object> response = new BaseResponse<>(false, ex.getMessage(), null);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<BaseResponse<Object>> handleGlobalException(Exception ex) {
-        ex.printStackTrace();
-        BaseResponse<Object> response = new BaseResponse<>(false, "An unexpected error occurred: " + ex.getMessage(), null);
+        ex.printStackTrace(); // Keep this for server logs
+        BaseResponse<Object> response = new BaseResponse<>(false, "Lỗi máy chủ nội bộ. Vui lòng thử lại sau.", null);
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

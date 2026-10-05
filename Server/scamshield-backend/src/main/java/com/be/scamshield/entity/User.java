@@ -16,17 +16,21 @@ public class User {
     @Column(name = "id")
     private Long id;
 
-    @Column(name = "username", unique = true, nullable = false)
-    private String username;
+    @Column(name = "full_name", nullable = false)
+    private String fullName;
+
+    @Column(name = "phone_number", unique = true, nullable = false)
+    private String phoneNumber;
 
     @Column(name = "email", unique = true, nullable = false)
     private String email;
 
+    public String getUsername() {
+        return email != null ? email : (phoneNumber != null ? phoneNumber : fullName);
+    }
+
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
-
-    @Column(name = "phone_number")
-    private String phoneNumber;
 
     @Builder.Default
     @Column(name = "is_phone_verified", nullable = false, columnDefinition = "boolean default false")

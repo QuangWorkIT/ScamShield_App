@@ -1,16 +1,23 @@
 package com.be.scamshield.serviceImpl;
 
+import com.be.scamshield.constant.RoleEnum;
+import com.be.scamshield.constant.UserStatus;
 import com.be.scamshield.dto.*;
+import com.be.scamshield.dto.request.RegisterPersonalRequest;
 import com.be.scamshield.entity.RefreshToken;
+import com.be.scamshield.entity.Role;
 import com.be.scamshield.entity.User;
 import com.be.scamshield.exception.BadRequestException;
 import com.be.scamshield.exception.ResourceNotFoundException;
 import com.be.scamshield.exception.UnauthorizedException;
 import com.be.scamshield.repository.RefreshTokenRepository;
+import com.be.scamshield.repository.RoleRepository;
 import com.be.scamshield.repository.UserRepository;
 import com.be.scamshield.security.JwtTokenProvider;
 import com.be.scamshield.security.UserPrincipal;
 import com.be.scamshield.service.IAuthService;
+import com.be.scamshield.service.IOtpService;
+import com.be.scamshield.service.IUserAlertSubscriptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -32,15 +39,56 @@ import java.util.HexFormat;
 public class AuthServiceImpl implements IAuthService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
+    private final IUserAlertSubscriptionService subscriptionService;
+    private final IOtpService otpService;
+
+    @Override
+    @Transactional
+    public void registerPersonal(RegisterPersonalRequest request) {
+        if (!request.isAgreeTerms()) {
+            throw new IllegalArgumentException("You must agree to the terms.");
+        }
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Email already exists.");
+        }
+        if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
+            throw new IllegalArgumentException("Phone number already exists.");
+        }
+
+        // Verify Email OTP
+        otpService.verifyOtp(request.getEmail(), request.getEmailOtp(), "EMAIL");
+
+        Role userRole = roleRepository.findByName(RoleEnum.REGISTERED_USER.name())
+                .orElseThrow(() -> new RuntimeException("Role not found"));
+
+        User newUser = User.builder()
+                .fullName(request.getFullName())
+                .phoneNumber(request.getPhoneNumber())
+                .email(request.getEmail())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .role(userRole)
+                .status(UserStatus.ACTIVE.name())
+                .reputationPoints(0)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        userRepository.save(newUser);
+
+        if (request.isReceiveAlerts()) {
+            subscriptionService.subscribeAllCategories(newUser);
+        }
+    }
 
     @Override
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        // Authenticate using username or phone number
+        // Authenticate using email, phone number, or username
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsernameOrPhoneNumber(), request.getPassword())
         );
@@ -98,10 +146,8 @@ public class AuthServiceImpl implements IAuthService {
     @Override
     @Transactional
     public void changePassword(String currentUsername, ChangePasswordRequest request) {
-        User user = userRepository.findByUsername(currentUsername)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + currentUsername));
+        User user = findUserByUsernameOrEmailOrPhone(currentUsername);
 
-        // Verify current (old) password
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
             throw new BadRequestException("Current password does not match!");
         }
@@ -110,11 +156,9 @@ public class AuthServiceImpl implements IAuthService {
             throw new BadRequestException("New password cannot be the same as the current password!");
         }
 
-        // Update password hash
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        // Invalidate old refresh tokens for security
         refreshTokenRepository.deleteByUser(user);
         log.info("Password successfully updated for user: {}", currentUsername);
     }
@@ -128,7 +172,9 @@ public class AuthServiceImpl implements IAuthService {
         }
 
         if (currentUsername != null && !currentUsername.isBlank()) {
-            userRepository.findByUsername(currentUsername).ifPresent(refreshTokenRepository::deleteByUser);
+            userRepository.findByEmail(currentUsername)
+                    .or(() -> userRepository.findByPhoneNumber(currentUsername))
+                    .ifPresent(refreshTokenRepository::deleteByUser);
         }
 
         SecurityContextHolder.clearContext();
@@ -138,9 +184,15 @@ public class AuthServiceImpl implements IAuthService {
     @Override
     @Transactional(readOnly = true)
     public UserDto getCurrentUserProfile(String currentUsername) {
-        User user = userRepository.findByUsername(currentUsername)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + currentUsername));
+        User user = findUserByUsernameOrEmailOrPhone(currentUsername);
         return mapToUserDto(user);
+    }
+
+    private User findUserByUsernameOrEmailOrPhone(String identifier) {
+        return userRepository.findByEmail(identifier)
+                .or(() -> userRepository.findByPhoneNumber(identifier))
+                .or(() -> userRepository.findByUsername(identifier))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + identifier));
     }
 
     private void saveRefreshToken(User user, String refreshTokenStr) {
