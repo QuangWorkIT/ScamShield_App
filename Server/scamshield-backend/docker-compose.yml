@@ -1,16 +1,16 @@
 services:
-  scamshield-api:
-    build: .
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://scamshield-db:5432/scamshield-db
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-    depends_on:
-      - scamshield-db
-    networks:
-      - scamshield-net
+  # scamshield-api:
+  #   build: .
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - SPRING_DATASOURCE_URL=jdbc:postgresql://scamshield-db:5432/scamshield-db
+  #     - SPRING_DATASOURCE_USERNAME=postgres
+  #     - SPRING_DATASOURCE_PASSWORD=postgres
+  #   depends_on:
+  #     - scamshield-db
+  #   networks:
+  #     - scamshield-net
 
   scamshield-db:
     image: postgres:16-alpine
@@ -28,8 +28,8 @@ services:
   mock-data-seeder:
     image: postgres:16-alpine
     depends_on:
-      - scamshield-api
       - scamshield-db
+      # - scamshield-api
     volumes:
       - ./script/mock_data_vi.sql:/mock.sql
     # Wait for API to start and generate tables (20 seconds), then insert mock data

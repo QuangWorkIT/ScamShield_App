@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   application:
     name: scamshield-backend
 
@@ -19,6 +21,29 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  # Mail Configuration
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+    display-name: ${MAIL_DISPLAY_NAME:ScamShield}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 # Server Port
 server:
   port: 8080
+
+# Twilio Configuration
+twilio:
+  account:
+    sid: ${TWILIO_ACCOUNT_SID:your_twilio_account_sid}
+  auth:
+    token: ${TWILIO_AUTH_TOKEN:your_twilio_auth_token}
+  phone:
+    number: ${TWILIO_PHONE_NUMBER:your_twilio_phone_number}
