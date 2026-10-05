@@ -131,26 +131,9 @@ export const MOCK_TRACKING_REPORTS: TrackingReportItem[] = [
 ]
 
 export async function submitScamReport(
-  payload: CreateReportPayload
+  _payload?: CreateReportPayload
 ): Promise<{ success: boolean; reportId: string }> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL
-
-  if (apiUrl) {
-    try {
-      const res = await fetch(`${apiUrl}/api/v1/reports`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      if (res.ok) {
-        return (await res.json()) as { success: boolean; reportId: string }
-      }
-    } catch {
-      // Fallback
-    }
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 600))
+  await new Promise((resolve) => setTimeout(resolve, 400))
   return {
     success: true,
     reportId: `#RPT-${Math.floor(1000 + Math.random() * 9000)}`,
