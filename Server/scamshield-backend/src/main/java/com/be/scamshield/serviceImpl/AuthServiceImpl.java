@@ -23,6 +23,8 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 
+import org.springframework.transaction.annotation.Transactional;
+
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements IAuthService {
@@ -34,6 +36,7 @@ public class AuthServiceImpl implements IAuthService {
     private final IOtpService otpService;
 
     @Override
+    @Transactional
     public void registerPersonal(RegisterPersonalRequest request) {
         if (!request.isAgreeTerms()) {
             throw new IllegalArgumentException("You must agree to the terms.");
@@ -76,6 +79,7 @@ public class AuthServiceImpl implements IAuthService {
     private String googleClientId;
 
     @Override
+    @Transactional
     public void registerGoogle(RegisterGoogleRequest request) {
         if (!request.isAgreeTerms()) {
             throw new IllegalArgumentException("You must agree to the terms.");
