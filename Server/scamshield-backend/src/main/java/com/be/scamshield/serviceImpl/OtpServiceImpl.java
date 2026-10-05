@@ -132,7 +132,7 @@ public class OtpServiceImpl implements IOtpService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, noRollbackFor = IllegalArgumentException.class)
     public boolean verifyOtp(String target, String otpCode, String type) {
         Optional<OtpVerification> otpVerificationOpt = otpVerificationRepository
                 .findTopByTargetAndTypeOrderByIdDesc(target, type);
@@ -141,15 +141,15 @@ public class OtpServiceImpl implements IOtpService {
             OtpVerification otpVerification = otpVerificationOpt.get();
             
             if (otpVerification.isVerified()) {
-                throw new IllegalArgumentException("Mã OTP này đã được sử dụng");
+                throw new IllegalArgumentException("Vui lòng gửi yêu cầu lấy mã OTP mới");
             }
-            
+
             if (otpVerification.getExpiresAt().isBefore(LocalDateTime.now())) {
-                throw new IllegalArgumentException("Mã OTP đã hết hạn");
+                throw new IllegalArgumentException("Vui lòng gửi yêu cầu lấy mã OTP mới");
             }
 
             if (otpVerification.getFailedAttempts() >= 5) {
-                throw new IllegalArgumentException("Mã OTP đã bị vô hiệu hóa do nhập sai quá 5 lần. Vui lòng yêu cầu mã mới.");
+                throw new IllegalArgumentException("Vui lòng gửi yêu cầu lấy mã OTP mới");
             }
 
             if (otpVerification.getOtpCode().equals(otpCode)) {
@@ -159,10 +159,15 @@ public class OtpServiceImpl implements IOtpService {
             } else {
                 otpVerification.setFailedAttempts(otpVerification.getFailedAttempts() + 1);
                 otpVerificationRepository.save(otpVerification);
-                throw new IllegalArgumentException("Mã OTP không chính xác");
+                int attemptsLeft = 5 - otpVerification.getFailedAttempts();
+                if (attemptsLeft > 0) {
+                    throw new IllegalArgumentException("Mã OTP không chính xác. Bạn còn " + attemptsLeft + " lần thử.");
+                } else {
+                    throw new IllegalArgumentException("Mã OTP đã bị vô hiệu hóa do nhập sai quá 5 lần. Vui lòng yêu cầu mã mới.");
+                }
             }
         }
         
-        throw new IllegalArgumentException("Không tìm thấy mã OTP cho thiết bị này");
+        throw new IllegalArgumentException("Chưa có yêu cầu gửi mã OTP nào cho thiết bị này");
     }
 }
