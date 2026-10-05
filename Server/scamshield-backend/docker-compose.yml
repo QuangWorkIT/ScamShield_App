@@ -7,9 +7,9 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://scamshield-db:5432/scamshield-db
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
-      - JWT_SECRET=c2NhbXNoaWVsZC1zZWN1cmUtand0LXNlY3JldC1rZXktZm9yLWF1dGhlbnRpY2F0aW9uLXNlcnZlci0yMDI2
-      - JWT_EXPIRATION_MS=86400000
-      - JWT_REFRESH_EXPIRATION_MS=604800000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
+      - JWT_REFRESH_EXPIRATION_MS=${JWT_REFRESH_EXPIRATION_MS}
     depends_on:
       - scamshield-db
     networks:
