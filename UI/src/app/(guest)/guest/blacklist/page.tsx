@@ -66,13 +66,11 @@ interface BlacklistItem {
   threatLevel: "critical" | "emergency" | "high" | "medium" | "financial"
   threatBadge: string
   threatBadgeType: "emergency-solid" | "danger-soft" | "warning-soft"
-  subTag: string
   impersonatedEntity: string
   reportCount: number
   description: string
   scamPattern: string
   reportedDate: string
-  status: string
   statusType: "blocked" | "investigating" | "pending"
   actionLabel: string
   iconType: "phone-slash" | "globe-slash" | "broadcast" | "phone-call" | "shield-slash" | "bank"
@@ -196,14 +194,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "critical",
     threatBadge: "CỰC KỲ NGUY HIỂM",
     threatBadgeType: "danger-soft",
-    subTag: "Đầu số VoIP mạo danh",
     impersonatedEntity: "Mạo danh Cục Cảnh sát Giao thông (CSGT)",
     reportCount: 1892,
     description:
       "Giả mạo Cục Cảnh sát giao thông thông báo nợ phạt nguội, ép nạn nhân tải file APK chứa mã độc theo dõi.",
     scamPattern: "Cuộc gọi giả danh cơ quan hành pháp / Tống tiền tâm lý qua mã độc APK",
     reportedDate: "12/04/2025",
-    status: "Đã chặn Telco",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "phone-slash",
@@ -219,14 +215,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "emergency",
     threatBadge: "KHẨN CẤP",
     threatBadgeType: "emergency-solid",
-    subTag: "Tên miền độc hại",
     impersonatedEntity: "Giả mạo Ngân hàng TMCP Ngoại thương (Vietcombank)",
     reportCount: 3124,
     description:
       "Website giả mạo giao diện Internet Banking Vietcombank đánh cắp mã OTP xác thực và mật khẩu đăng nhập ngân hàng.",
     scamPattern: "Phishing chiếm đoạt tài khoản Internet Banking & Smart OTP",
     reportedDate: "13/04/2025",
-    status: "Đã khóa DNS quốc gia",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "globe-slash",
@@ -242,14 +236,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "high",
     threatBadge: "NGUY HIỂM",
     threatBadgeType: "warning-soft",
-    subTag: "SMS BTS Giả mạo",
     impersonatedEntity: "Giả mạo Brandname SMS Vietcombank",
     reportCount: 940,
     description:
       "Phát sóng từ các thiết bị trạm BTS lưu động bất hợp pháp chèn tin nhắn chứa link nhận thưởng giả mạo.",
     scamPattern: "Phát sóng sóng di động chèn tin nhắn mạo danh Brandname qua trạm BTS giả",
     reportedDate: "11/04/2025",
-    status: "Đang phối hợp truy quét",
     statusType: "investigating",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "broadcast",
@@ -265,14 +257,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "high",
     threatBadge: "RỦI RO CAO",
     threatBadgeType: "danger-soft",
-    subTag: "Cuộc gọi quấy rối",
     impersonatedEntity: "Mạo danh Tổng công ty Điện lực Việt Nam (EVN)",
     reportCount: 1405,
     description:
       "Mạo danh Tổng công ty Điện lực Việt Nam (EVN) đe dọa cắt điện trong 2 giờ nhằm cưỡng ép nạn nhân thanh toán qua tài khoản lừa đảo.",
     scamPattern: "Giả mạo thông báo vi phạm hợp đồng dịch vụ công ích / Ép chuyển tiền gấp",
     reportedDate: "10/04/2025",
-    status: "Chờ xử lý nhà mạng",
     statusType: "pending",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "phone-call",
@@ -288,14 +278,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "financial",
     threatBadge: "LỪA ĐẢO TÀI CHÍNH",
     threatBadgeType: "danger-soft",
-    subTag: "Đầu tư Ponzi ảo",
     impersonatedEntity: "Quỹ Đầu tư Năng Lượng Xanh Giả mạo",
     reportCount: 870,
     description:
       "Sàn đầu tư năng lượng xanh hứa hẹn lãi suất 40%/tháng, dụ dỗ người dùng nạp tiền vào ví tiền số cá nhân rồi khóa tài khoản.",
     scamPattern: "Huy động vốn đa cấp trực tuyến / Mô hình Ponzi tiền số USDT",
     reportedDate: "09/04/2025",
-    status: "Chặn tường lửa ISP",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "shield-slash",
@@ -313,14 +301,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "financial",
     threatBadge: "LỪA ĐẢO TÀI CHÍNH",
     threatBadgeType: "danger-soft",
-    subTag: "Tài khoản nhận tiền lừa đảo",
     impersonatedEntity: "Tài khoản nhận tiền lừa đảo tuyển dụng CTV Shopee/Lazada",
     reportCount: 2450,
     description:
       "Tài khoản thu tiền các nạn nhân bị dụ dỗ làm nhiệm vụ cộng tác viên Shopee/Lazada hưởng hoa hồng ảo, nạp tiền vào không thể rút ra.",
     scamPattern: "Lừa đảo việc làm online / Nạp tiền làm nhiệm vụ giật đơn hàng ảo",
     reportedDate: "08/04/2025",
-    status: "Đã phong tỏa tài khoản",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "bank",
@@ -336,14 +322,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "critical",
     threatBadge: "CỰC KỲ NGUY HIỂM",
     threatBadgeType: "danger-soft",
-    subTag: "Giả mạo Cổng DVC Quốc gia",
     impersonatedEntity: "Giả mạo Cổng Dịch vụ công Quốc gia",
     reportCount: 4210,
     description:
       "Trang web giả mạo cổng DVC Quốc gia yêu cầu công dân cài app VNeID giả mạo để chiếm quyền điều khiển điện thoại từ xa.",
     scamPattern: "Mã độc Android Accessibility Service chiếm toàn quyền thiết bị di động",
     reportedDate: "07/04/2025",
-    status: "Đã khóa DNS quốc gia",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "globe-slash",
@@ -359,14 +343,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "high",
     threatBadge: "RỦI RO CAO",
     threatBadgeType: "danger-soft",
-    subTag: "Mạo danh cán bộ thuế",
     impersonatedEntity: "Mạo danh Chi cục Thuế yêu cầu quyết toán thuế",
     reportCount: 1670,
     description:
       "Gọi điện thoại ép hộ kinh doanh cài phần mềm quyết toán thuế điện tử giả mạo để chiếm đoạt tài khoản ngân hàng.",
     scamPattern: "Giả mạo cơ quan Thuế / Hỗ trợ hoàn thuế giá trị gia tăng lừa đảo",
     reportedDate: "06/04/2025",
-    status: "Đã chặn Telco",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "phone-call",
@@ -382,14 +364,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "emergency",
     threatBadge: "KHẨN CẤP",
     threatBadgeType: "emergency-solid",
-    subTag: "SMS Brandname giả",
     impersonatedEntity: "Giả mạo Ngân hàng BIDV",
     reportCount: 2890,
     description:
       "Giả mạo thương hiệu BIDV phát tán tin nhắn cảnh báo tài khoản bị đăng nhập nơi khác kèm link lừa đảo thay đổi mật khẩu.",
     scamPattern: "SMS Spoofing chèn tin nhắn vào luồng Brandname ngân hàng chính thức",
     reportedDate: "05/04/2025",
-    status: "Đang phối hợp truy quét",
     statusType: "investigating",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "broadcast",
@@ -405,14 +385,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "financial",
     threatBadge: "LỪA ĐẢO TÀI CHÍNH",
     threatBadgeType: "danger-soft",
-    subTag: "Sàn Ponzi tiền ảo",
     impersonatedEntity: "Sàn Giao dịch Tiền mã hóa VIP Pool",
     reportCount: 1980,
     description:
       "Kêu gọi tham gia nhóm Telegram VIP đầu tư vàng và tiền điện tử có cam kết bảo hiểm vốn nhưng không thể rút vốn khi nạp tiền lớn.",
     scamPattern: "Sàn giao dịch nhị phân (BO) can thiệp kết quả lệnh / Giữ tiền nạn nhân",
     reportedDate: "04/04/2025",
-    status: "Chặn tường lửa ISP",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "shield-slash",
@@ -430,14 +408,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "critical",
     threatBadge: "CỰC KỲ NGUY HIỂM",
     threatBadgeType: "danger-soft",
-    subTag: "Mạo danh Viện Kiểm sát",
     impersonatedEntity: "Mạo danh Viện Kiểm sát Nhân dân Tối cao",
     reportCount: 3150,
     description:
       "Đầu số gọi tự xưng Kiểm sát viên yêu cầu nạn nhân kê khai tài sản và chuyển tiền vào 'tài khoản an toàn' của cơ quan điều tra.",
     scamPattern: "Thao túng tâm lý / Đe dọa bắt giam / Cưỡng ép chuyển tiền giám định",
     reportedDate: "03/04/2025",
-    status: "Đã chặn Telco",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "phone-slash",
@@ -453,14 +429,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "emergency",
     threatBadge: "KHẨN CẤP",
     threatBadgeType: "emergency-solid",
-    subTag: "Phishing nạp thẻ cào",
     impersonatedEntity: "Giả mạo Cổng Khuyến mãi Mobifone / Vinaphone",
     reportCount: 1760,
     description:
       "Trang web dụ dỗ người dùng nạp thẻ cào điện thoại gấp 10 lần giá trị để chiếm đoạt mã thẻ cào và số seri của nạn nhân.",
     scamPattern: "Lừa đảo tri ân khách hàng nạp thẻ nhân dịp kỷ niệm / Chiếm đoạt mã thẻ cào",
     reportedDate: "02/04/2025",
-    status: "Đã khóa DNS quốc gia",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "globe-slash",
@@ -476,14 +450,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "high",
     threatBadge: "NGUY HIỂM",
     threatBadgeType: "warning-soft",
-    subTag: "SMS BTS Giả mạo",
     impersonatedEntity: "Giả mạo Tập đoàn Bưu chính Viễn thông VNPT",
     reportCount: 1120,
     description:
       "Phát tán tin nhắn giả thông báo tích điểm đổi quà tặng cao cấp, dẫn dụ người dân điền thông tin thẻ ngân hàng vào link độc hại.",
     scamPattern: "Lừa đảo đổi điểm thưởng nhà mạng / Đánh cắp thông tin thẻ tín dụng",
     reportedDate: "01/04/2025",
-    status: "Đang phối hợp truy quét",
     statusType: "investigating",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "broadcast",
@@ -499,14 +471,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "high",
     threatBadge: "RỦI RO CAO",
     threatBadgeType: "danger-soft",
-    subTag: "Đe dọa khóa SIM",
     impersonatedEntity: "Mạo danh Cục Viễn thông (Bộ TT&TT)",
     reportCount: 2010,
     description:
       "Cuộc gọi tự động thông báo số điện thoại của bạn sẽ bị khóa trong 2 giờ do chưa chuẩn hóa thông tin thuê bao, yêu cầu bấm phím 9 để gặp cán bộ.",
     scamPattern: "Robocall đe dọa khóa sim / Dụ dỗ cung cấp CCCD và mã OTP",
     reportedDate: "31/03/2025",
-    status: "Chờ xử lý nhà mạng",
     statusType: "pending",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "phone-call",
@@ -522,14 +492,12 @@ const BLACKLIST_DATA: BlacklistItem[] = [
     threatLevel: "financial",
     threatBadge: "LỪA ĐẢO TÀI CHÍNH",
     threatBadgeType: "danger-soft",
-    subTag: "Bot giao dịch giả mạo",
     impersonatedEntity: "Bot Giao dịch AI Sinh lời Tự động",
     reportCount: 930,
     description:
       "Quảng cáo bot trí tuệ nhân tạo tự động giao dịch ngoại hối với cam kết lợi nhuận 5% mỗi ngày, khóa lệnh nạp rút sau khi gom tiền nạn nhân.",
     scamPattern: "Đầu tư thuật toán AI lừa đảo / Chiếm đoạt tài khoản ví tiền điện tử",
     reportedDate: "30/03/2025",
-    status: "Chặn tường lửa ISP",
     statusType: "blocked",
     actionLabel: "Chi tiết cảnh báo",
     iconType: "shield-slash",
@@ -572,9 +540,7 @@ export default function GuestBlacklistPage() {
         item.hotline.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.website.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.identifierValue.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory =
-        selectedCategory === "all" || item.category === selectedCategory
-      return matchesSearch && matchesCategory
+      return matchesSearch
     })
 
     if (sortOrder === "name") {
@@ -582,7 +548,7 @@ export default function GuestBlacklistPage() {
     }
 
     return result
-  }, [searchQuery, selectedCategory, sortOrder])
+  }, [searchQuery, sortOrder])
 
   // Filter Blacklist
   const filteredBlacklist = useMemo(() => {
@@ -591,8 +557,7 @@ export default function GuestBlacklistPage() {
         searchQuery === "" ||
         item.target.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.impersonatedEntity.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.subTag.toLowerCase().includes(searchQuery.toLowerCase())
+        item.description.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesCategory =
         selectedCategory === "all" || item.targetType === selectedCategory
       return matchesSearch && matchesCategory
@@ -710,6 +675,9 @@ export default function GuestBlacklistPage() {
                 onClick={() => {
                   setActiveTab("whitelist")
                   setCurrentPage(1)
+                  if (sortOrder === "reports") {
+                    setSortOrder("newest")
+                  }
                 }}
                 className={cn(
                   "inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all",
@@ -784,38 +752,45 @@ export default function GuestBlacklistPage() {
 
           {/* Filters & Sort Controls Row */}
           <div className="mt-4 flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between">
-            {/* Filter Tags */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(
-                [
-                  { key: "all", label: "Tất cả loại hình" },
-                  { key: "phone", label: "Số điện thoại" },
-                  { key: "website", label: "Website / Domain" },
-                  { key: "bank", label: "Tài khoản ngân hàng" },
-                  { key: "sms", label: "SMS Brandname" },
-                ] as const
-              ).map((cat) => (
-                <button
-                  key={cat.key}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCategory(cat.key)
-                    setCurrentPage(1)
-                  }}
-                  className={cn(
-                    "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
-                    selectedCategory === cat.key
-                      ? "bg-[#131A33] text-white shadow-xs dark:bg-primary dark:text-primary-foreground"
-                      : "bg-[#F2F3FF] text-[#45464D] hover:bg-[#E2E7FF] hover:text-[#131B2E] dark:bg-muted dark:text-muted-foreground dark:hover:bg-muted/80 dark:hover:text-foreground"
-                  )}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
+            {/* Filter Tags - Only displayed in Blacklist tab */}
+            {activeTab === "blacklist" && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(
+                  [
+                    { key: "all", label: "Tất cả loại hình" },
+                    { key: "phone", label: "Số điện thoại" },
+                    { key: "website", label: "Website / Domain" },
+                    { key: "bank", label: "Tài khoản ngân hàng" },
+                    { key: "sms", label: "SMS Brandname" },
+                  ] as const
+                ).map((cat) => (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(cat.key)
+                      setCurrentPage(1)
+                    }}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
+                      selectedCategory === cat.key
+                        ? "bg-[#131A33] text-white shadow-xs dark:bg-primary dark:text-primary-foreground"
+                        : "bg-[#F2F3FF] text-[#45464D] hover:bg-[#E2E7FF] hover:text-[#131B2E] dark:bg-muted dark:text-muted-foreground dark:hover:bg-muted/80 dark:hover:text-foreground"
+                    )}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Sort Dropdown */}
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#45464D] dark:text-muted-foreground">
+            <div
+              className={cn(
+                "flex items-center gap-2 text-xs font-semibold text-[#45464D] dark:text-muted-foreground",
+                activeTab === "whitelist" && "sm:ml-auto"
+              )}
+            >
               <span>SẮP XẾP:</span>
               <div className="relative">
                 <select
@@ -920,11 +895,6 @@ export default function GuestBlacklistPage() {
                             {item.threatBadge}
                           </span>
                         )}
-
-                        {/* Secondary Tag */}
-                        <span className="rounded bg-[#F1F5F9] px-2 py-0.5 text-[11px] font-medium text-[#475569] dark:bg-slate-800 dark:text-slate-300">
-                          {item.subTag}
-                        </span>
                       </div>
 
                       {/* Line 2: Description */}
@@ -947,12 +917,7 @@ export default function GuestBlacklistPage() {
                           Cập nhật: {item.reportedDate}
                         </span>
 
-                        {item.statusType === "pending" && (
-                          <span className="inline-flex items-center gap-1.5 font-medium text-[#475569] dark:text-slate-400">
-                            <ClockIcon size={14} weight="bold" />
-                            {item.status}
-                          </span>
-                        )}
+
                       </div>
                     </div>
                   </div>
@@ -1066,17 +1031,16 @@ export default function GuestBlacklistPage() {
                   Không tìm thấy đơn vị nào phù hợp
                 </h3>
                 <p className="mt-1 text-sm text-[#45464D] dark:text-muted-foreground">
-                  Thử tìm kiếm với từ khóa khác hoặc đổi bộ lọc danh mục.
+                  Thử tìm kiếm với từ khóa khác.
                 </p>
                 <button
                   type="button"
                   onClick={() => {
                     setSearchQuery("")
-                    setSelectedCategory("all")
                   }}
                   className="mt-4 inline-flex items-center rounded-lg bg-[#131A33] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#131A33]/90 dark:bg-primary dark:text-primary-foreground"
                 >
-                  Đặt lại bộ lọc
+                  Đặt lại tìm kiếm
                 </button>
               </div>
             ) : (
@@ -1262,14 +1226,6 @@ export default function GuestBlacklistPage() {
                   </span>
                   <span className="mt-0.5 block font-bold text-foreground">
                     {selectedBlacklistItem.impersonatedEntity}
-                  </span>
-                </div>
-                <div className="rounded-lg border border-border p-2.5">
-                  <span className="block text-[10px] text-muted-foreground">
-                    Tình trạng xử lý
-                  </span>
-                  <span className="mt-0.5 block font-bold text-rose-600 dark:text-rose-400">
-                    {selectedBlacklistItem.status}
                   </span>
                 </div>
                 <div className="rounded-lg border border-border p-2.5">
