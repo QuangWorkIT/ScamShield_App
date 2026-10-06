@@ -15,7 +15,4 @@ public class AuthResponse {
 
     @Schema(description = "JWT Access Token", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
     private String accessToken;
-
-    @Schema(description = "Refresh Token", example = "d9f8e7c6-b5a4-3210...")
-    private String refreshToken;
 }

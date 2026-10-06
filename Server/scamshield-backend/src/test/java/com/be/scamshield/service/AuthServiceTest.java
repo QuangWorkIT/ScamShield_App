@@ -53,7 +53,6 @@ class AuthServiceTest {
         sampleRole = Role.builder().id(1L).name("REGISTERED_USER").build();
         sampleUser = User.builder()
                 .id(1L)
-                .username("testuser")
                 .email("testuser@example.com")
                 .passwordHash("encodedOldPassword")
                 .role(sampleRole)
@@ -66,7 +65,7 @@ class AuthServiceTest {
 
     @Test
     void login_Success() {
-        LoginRequest request = new LoginRequest("testuser", "Password123!");
+        LoginRequest request = new LoginRequest("testuser@example.com", "Password123!");
         Authentication authentication = mock(Authentication.class);
         UserPrincipal principal = UserPrincipal.create(sampleUser);
 
@@ -76,16 +75,14 @@ class AuthServiceTest {
         when(tokenProvider.generateAccessToken(authentication)).thenReturn("mockAccessToken");
         when(tokenProvider.generateRefreshToken()).thenReturn("mockRefreshToken");
 
-        AuthResponse response = authService.login(request);
+        AuthResponse response = authService.login(request, null);
 
         assertNotNull(response);
         assertEquals("mockAccessToken", response.getAccessToken());
-        assertEquals("mockRefreshToken", response.getRefreshToken());
     }
 
     @Test
     void refreshToken_Success() {
-        RefreshTokenRequest request = new RefreshTokenRequest("valid_refresh_token");
         RefreshToken refreshTokenEntity = RefreshToken.builder()
                 .id(1L)
                 .user(sampleUser)
@@ -94,24 +91,23 @@ class AuthServiceTest {
                 .build();
 
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(refreshTokenEntity));
-        when(tokenProvider.generateAccessTokenForUser(1L, "testuser", "testuser@example.com", "REGISTERED_USER")).thenReturn("newAccessToken");
+        when(tokenProvider.generateAccessTokenForUser(1L, "testuser@example.com", "testuser@example.com", "REGISTERED_USER")).thenReturn("newAccessToken");
 
-        AuthResponse response = authService.refreshToken(request);
+        AuthResponse response = authService.refreshToken("valid_refresh_token", null);
 
         assertNotNull(response);
         assertEquals("newAccessToken", response.getAccessToken());
-        assertEquals("valid_refresh_token", response.getRefreshToken());
     }
 
     @Test
     void changePassword_Success() {
         ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword456!");
 
-        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(sampleUser));
+        when(userRepository.findByEmail("testuser@example.com")).thenReturn(Optional.of(sampleUser));
         when(passwordEncoder.matches("OldPassword123!", "encodedOldPassword")).thenReturn(true);
         when(passwordEncoder.encode("NewPassword456!")).thenReturn("encodedNewPassword");
 
-        authService.changePassword("testuser", request);
+        authService.changePassword("testuser@example.com", request);
 
         verify(userRepository, times(1)).save(sampleUser);
         verify(refreshTokenRepository, times(1)).deleteByUser(sampleUser);
@@ -122,9 +118,9 @@ class AuthServiceTest {
     void changePassword_WrongOldPassword_ThrowsException() {
         ChangePasswordRequest request = new ChangePasswordRequest("WrongPassword", "NewPassword456!");
 
-        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(sampleUser));
+        when(userRepository.findByEmail("testuser@example.com")).thenReturn(Optional.of(sampleUser));
         when(passwordEncoder.matches("WrongPassword", "encodedOldPassword")).thenReturn(false);
 
-        assertThrows(BadRequestException.class, () -> authService.changePassword("testuser", request));
+        assertThrows(BadRequestException.class, () -> authService.changePassword("testuser@example.com", request));
     }
 }

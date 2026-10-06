@@ -2,17 +2,23 @@ package com.be.scamshield.controller;
 
 import com.be.scamshield.dto.*;
 import com.be.scamshield.dto.request.RegisterPersonalRequest;
+import com.be.scamshield.exception.UnauthorizedException;
 import com.be.scamshield.security.UserPrincipal;
 import com.be.scamshield.service.IAuthService;
 import com.be.scamshield.service.IOtpService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Arrays;
 
 @RestController
 @RequestMapping({"/api/v1/auth", "/api/auth"})
@@ -24,17 +30,26 @@ public class AuthController {
     private final IOtpService otpService;
 
     @PostMapping("/login")
-    @Operation(summary = "Login user", description = "Authenticates user using Username or Phone Number and password. Returns JWT access token and refresh token.")
-    public ResponseEntity<BaseResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
-        AuthResponse response = authService.login(request);
-        return ResponseEntity.ok(new BaseResponse<>(true, "Login successful", response));
+    @Operation(summary = "Login user", description = "Authenticates user using Username, Email or Phone Number and password. Returns JWT access token in body and sets refresh token in HttpOnly cookie.")
+    public ResponseEntity<BaseResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
+        AuthResponse authResponse = authService.login(request, response);
+        return ResponseEntity.ok(new BaseResponse<>(true, "Login successful", authResponse));
     }
 
     @PostMapping("/refresh-token")
-    @Operation(summary = "Refresh access token", description = "Exchanges a valid refresh token for a new JWT access token.")
-    public ResponseEntity<BaseResponse<AuthResponse>> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
-        AuthResponse response = authService.refreshToken(request);
-        return ResponseEntity.ok(new BaseResponse<>(true, "Token refreshed successfully", response));
+    @Operation(summary = "Refresh access token", description = "Exchanges a valid refresh token from HttpOnly cookie for a new JWT access token.")
+    public ResponseEntity<BaseResponse<AuthResponse>> refreshToken(
+            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            refreshToken = extractCookie(request, "refreshToken");
+        }
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new UnauthorizedException("Refresh token cookie is missing");
+        }
+        AuthResponse authResponse = authService.refreshToken(refreshToken, response);
+        return ResponseEntity.ok(new BaseResponse<>(true, "Token refreshed successfully", authResponse));
     }
 
     @PostMapping("/change-password")
@@ -47,13 +62,18 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    @Operation(summary = "Logout user", description = "Revokes refresh token and clears user session.")
-    public ResponseEntity<BaseResponse<String>> logout(@RequestBody(required = false) RefreshTokenRequest request,
-                                                       @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        String refreshToken = request != null ? request.getRefreshToken() : null;
+    @Operation(summary = "Logout user", description = "Revokes refresh token cookie and clears user session.")
+    public ResponseEntity<BaseResponse<String>> logout(
+            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            refreshToken = extractCookie(request, "refreshToken");
+        }
         String username = userPrincipal != null ? userPrincipal.getUsername() : null;
 
-        authService.logout(refreshToken, username);
+        authService.logout(refreshToken, username, response);
         return ResponseEntity.ok(new BaseResponse<>(true, "Logged out successfully"));
     }
 
@@ -96,5 +116,14 @@ public class AuthController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new BaseResponse<>(false, e.getMessage(), null));
         }
+    }
+
+    private String extractCookie(HttpServletRequest request, String name) {
+        if (request.getCookies() == null) return null;
+        return Arrays.stream(request.getCookies())
+                .filter(c -> name.equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
     }
 }

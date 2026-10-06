@@ -18,8 +18,11 @@ import com.be.scamshield.security.UserPrincipal;
 import com.be.scamshield.service.IAuthService;
 import com.be.scamshield.service.IOtpService;
 import com.be.scamshield.service.IUserAlertSubscriptionService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -87,7 +90,7 @@ public class AuthServiceImpl implements IAuthService {
 
     @Override
     @Transactional
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, HttpServletResponse response) {
         // Authenticate using email, phone number, or username
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsernameOrPhoneNumber(), request.getPassword())
@@ -99,7 +102,10 @@ public class AuthServiceImpl implements IAuthService {
         User user = userRepository.findById(userPrincipal.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userPrincipal.getId()));
 
-        if ("BANNED".equalsIgnoreCase(user.getStatus()) || "INACTIVE".equalsIgnoreCase(user.getStatus())) {
+        // Check account status constraint using UserStatus enum
+        if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus()) ||
+            UserStatus.INACTIVE.name().equalsIgnoreCase(user.getStatus()) ||
+            UserStatus.SUSPENDED.name().equalsIgnoreCase(user.getStatus())) {
             throw new UnauthorizedException("Your account is " + user.getStatus().toLowerCase() + ". Please contact support.");
         }
 
@@ -112,34 +118,49 @@ public class AuthServiceImpl implements IAuthService {
         refreshTokenRepository.deleteByUser(user);
         saveRefreshToken(user, refreshToken);
 
+        // Set refresh token in HttpOnly Cookie
+        setRefreshTokenCookie(response, refreshToken);
+
         log.info("User logged in successfully: {}", user.getUsername());
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken)
                 .build();
     }
 
     @Override
     @Transactional
-    public AuthResponse refreshToken(RefreshTokenRequest request) {
-        String tokenHash = hashToken(request.getRefreshToken());
+    public AuthResponse refreshToken(String refreshTokenStr, HttpServletResponse response) {
+        if (refreshTokenStr == null || refreshTokenStr.isBlank()) {
+            throw new UnauthorizedException("Refresh token is missing");
+        }
+
+        String tokenHash = hashToken(refreshTokenStr);
 
         RefreshToken refreshTokenEntity = refreshTokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new UnauthorizedException("Invalid or revoked refresh token"));
 
         if (refreshTokenEntity.getExpiresAt().isBefore(LocalDateTime.now())) {
             refreshTokenRepository.delete(refreshTokenEntity);
+            clearRefreshTokenCookie(response);
             throw new UnauthorizedException("Refresh token has expired. Please login again.");
         }
 
         User user = refreshTokenEntity.getUser();
-        String roleName = user.getRole() != null ? user.getRole().getName() : "REGISTERED_USER";
+
+        // Check account status constraint using UserStatus enum
+        if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus()) ||
+            UserStatus.INACTIVE.name().equalsIgnoreCase(user.getStatus()) ||
+            UserStatus.SUSPENDED.name().equalsIgnoreCase(user.getStatus())) {
+            clearRefreshTokenCookie(response);
+            throw new UnauthorizedException("Your account is " + user.getStatus().toLowerCase() + ". Please contact support.");
+        }
+
+        String roleName = user.getRole() != null ? user.getRole().getName() : RoleEnum.REGISTERED_USER.name();
         String newAccessToken = tokenProvider.generateAccessTokenForUser(user.getId(), user.getUsername(), user.getEmail(), roleName);
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(request.getRefreshToken())
                 .build();
     }
 
@@ -165,18 +186,20 @@ public class AuthServiceImpl implements IAuthService {
 
     @Override
     @Transactional
-    public void logout(String refreshToken, String currentUsername) {
-        if (refreshToken != null && !refreshToken.isBlank()) {
-            String tokenHash = hashToken(refreshToken);
+    public void logout(String refreshTokenStr, String currentUsername, HttpServletResponse response) {
+        if (refreshTokenStr != null && !refreshTokenStr.isBlank()) {
+            String tokenHash = hashToken(refreshTokenStr);
             refreshTokenRepository.deleteByTokenHash(tokenHash);
         }
 
         if (currentUsername != null && !currentUsername.isBlank()) {
             userRepository.findByEmail(currentUsername)
                     .or(() -> userRepository.findByPhoneNumber(currentUsername))
+                    .or(() -> userRepository.findByUsername(currentUsername))
                     .ifPresent(refreshTokenRepository::deleteByUser);
         }
 
+        clearRefreshTokenCookie(response);
         SecurityContextHolder.clearContext();
         log.info("User logged out successfully");
     }
@@ -209,6 +232,30 @@ public class AuthServiceImpl implements IAuthService {
         refreshTokenRepository.save(refreshToken);
     }
 
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        if (response == null) return;
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(false) // Can be set to true in HTTPS production
+                .path("/")
+                .maxAge(tokenProvider.getRefreshExpirationInMs() / 1000)
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private void clearRefreshTokenCookie(HttpServletResponse response) {
+        if (response == null) return;
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
     private String hashToken(String token) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -226,7 +273,7 @@ public class AuthServiceImpl implements IAuthService {
                 .email(user.getEmail())
                 .phoneNumber(user.getPhoneNumber())
                 .isPhoneVerified(user.getIsPhoneVerified() != null ? user.getIsPhoneVerified() : false)
-                .role(user.getRole() != null ? user.getRole().getName() : "REGISTERED_USER")
+                .role(user.getRole() != null ? user.getRole().getName() : RoleEnum.REGISTERED_USER.name())
                 .status(user.getStatus())
                 .reputationPoints(user.getReputationPoints())
                 .createdAt(user.getCreatedAt())
