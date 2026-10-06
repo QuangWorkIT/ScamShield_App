@@ -1,16 +1,19 @@
 services:
-  # scamshield-api:
-  #   build: .
-  #   ports:
-  #     - "8080:8080"
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:postgresql://scamshield-db:5432/scamshield-db
-  #     - SPRING_DATASOURCE_USERNAME=postgres
-  #     - SPRING_DATASOURCE_PASSWORD=postgres
-  #   depends_on:
-  #     - scamshield-db
-  #   networks:
-  #     - scamshield-net
+  scamshield-api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://scamshield-db:5432/scamshield-db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
+      - JWT_REFRESH_EXPIRATION_MS=${JWT_REFRESH_EXPIRATION_MS}
+    depends_on:
+      - scamshield-db
+    networks:
+      - scamshield-net
 
   scamshield-db:
     image: postgres:16-alpine

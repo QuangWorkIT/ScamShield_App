@@ -39,6 +39,13 @@ spring:
 server:
   port: 8080
 
+# Application Configurations
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS}
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}
+
 # Twilio Configuration
 twilio:
   account:
