@@ -37,7 +37,7 @@ services:
       [
         "sh",
         "-c",
-        "echo 'Waiting 20s for API to create tables...'; sleep 20; PGPASSWORD=postgres psql -h scamshield-db -U postgres -d scamshield-db -f /mock.sql",
+        "echo 'Waiting 20s for API to create tables...'; sleep 20; PGPASSWORD=postgres psql -h scamshield-db -U postgres -d scamshield-db -v ON_ERROR_STOP=1 -c \"SET scamshield.seed_mock_data='on'\" -f /mock.sql",
       ]
     networks:
       - scamshield-net

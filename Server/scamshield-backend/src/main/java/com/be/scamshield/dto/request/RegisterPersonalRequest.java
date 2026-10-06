@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.ToString;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Data
@@ -23,18 +25,21 @@ public class RegisterPersonalRequest {
 
     @NotBlank(message = "Email không được để trống")
     @Email(message = "Email không đúng định dạng")
+    @Size(max = 254, message = "Email tối đa 254 ký tự")
     private String email;
 
     @NotBlank(message = "Mật khẩu không được để trống")
-    @Size(min = 6, message = "Mật khẩu phải có ít nhất 6 ký tự")
+    @Size(min = 6, max = 72, message = "Mật khẩu phải từ 6 đến 72 ký tự")
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @ToString.Exclude
     private String password;
 
-    @NotBlank(message = "Mã OTP Email không được để trống")
-    private String emailOtp;
-
-    // Tạm thời bỏ qua yêu cầu bắt buộc nhập mã OTP Số điện thoại
-    // @NotBlank(message = "Mã OTP Số điện thoại không được để trống")
-    private String phoneOtp;
+    @NotBlank(message = "Cần xác thực email và điện thoại trước khi đăng ký")
+    @Pattern(regexp = "[A-Za-z0-9_-]{43}", message = "Mã xác nhận liên hệ không hợp lệ")
+    @Schema(description = "Token từ /api/auth/verify-contacts, hạn 10 phút", accessMode = Schema.AccessMode.WRITE_ONLY)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @ToString.Exclude
+    private String verificationToken;
 
     @AssertTrue(message = "Bạn phải đồng ý với điều khoản sử dụng")
     private boolean agreeTerms;

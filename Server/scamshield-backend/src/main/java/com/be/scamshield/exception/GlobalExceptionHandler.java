@@ -7,12 +7,51 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(OtpRateLimitException.class)
+    public ResponseEntity<BaseResponse<Void>> handleOtpRateLimit(OtpRateLimitException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new BaseResponse<>(false, ex.getMessage(), null));
+    }
+
+    @ExceptionHandler(SmsProviderException.class)
+    public ResponseEntity<BaseResponse<Void>> handleSmsProvider(SmsProviderException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new BaseResponse<>(false, ex.getMessage(), null));
+    }
+
+    @ExceptionHandler(RegistrationConflictException.class)
+    public ResponseEntity<BaseResponse<Void>> handleRegistrationConflict(RegistrationConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new BaseResponse<>(false, ex.getMessage(), null));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<BaseResponse<Void>> handleUploadSize(MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new BaseResponse<>(false, "Tệp không được vượt quá 25MB và request không được vượt quá 80MB", null));
+    }
+
+    @ExceptionHandler({MissingServletRequestPartException.class, MissingServletRequestParameterException.class, HttpMessageNotReadableException.class})
+    public ResponseEntity<BaseResponse<Void>> handleMalformedRequest(Exception ex) {
+        return ResponseEntity.badRequest().body(new BaseResponse<>(false, "Thiếu dữ liệu bắt buộc hoặc JSON không hợp lệ", null));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<BaseResponse<Void>> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(new BaseResponse<>(false, "Content-Type không được hỗ trợ; kiểm tra định dạng request và các multipart part", null));
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<BaseResponse<Object>> handleResourceNotFoundException(ResourceNotFoundException ex) {

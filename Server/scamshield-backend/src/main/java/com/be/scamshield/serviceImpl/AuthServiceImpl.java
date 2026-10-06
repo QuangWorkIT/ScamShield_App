@@ -1,5 +1,6 @@
 package com.be.scamshield.serviceImpl;
 
+import com.be.scamshield.constant.OtpType;
 import com.be.scamshield.constant.RoleEnum;
 import com.be.scamshield.constant.UserStatus;
 import com.be.scamshield.dto.request.RegisterPersonalRequest;
@@ -10,12 +11,21 @@ import com.be.scamshield.repository.UserRepository;
 import com.be.scamshield.service.IAuthService;
 import com.be.scamshield.service.IOtpService;
 import com.be.scamshield.service.IUserAlertSubscriptionService;
+import com.be.scamshield.exception.OtpRateLimitException;
+import com.be.scamshield.exception.SmsProviderException;
+import com.be.scamshield.exception.BadRequestException;
+import com.be.scamshield.exception.RegistrationConflictException;
+import com.be.scamshield.util.VietnamPhoneNumbers;
+import org.springframework.dao.DataIntegrityViolationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
 import org.springframework.beans.factory.annotation.Value;
 import com.be.scamshield.dto.request.RegisterGoogleRequest;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
@@ -29,46 +39,59 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements IAuthService {
 
+    private final Clock applicationClock;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final IUserAlertSubscriptionService subscriptionService;
     private final IOtpService otpService;
+    private final ContactVerificationService contactVerificationService;
 
     @Override
     @Transactional
     public void registerPersonal(RegisterPersonalRequest request) {
         if (!request.isAgreeTerms()) {
-            throw new IllegalArgumentException("You must agree to the terms.");
+            throw new BadRequestException("Bạn phải đồng ý với điều khoản sử dụng");
         }
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("Email already exists.");
+        String email = contactVerificationService.normalizeEmail(request.getEmail());
+        String phone = VietnamPhoneNumbers.nationalMobile(request.getPhoneNumber());
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new RegistrationConflictException("Email đã được dùng cho một tài khoản");
         }
-        if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
-            throw new IllegalArgumentException("Phone number already exists.");
+        if (userRepository.findByPhoneNumber(phone).isPresent()) {
+            throw new RegistrationConflictException("Số điện thoại đã được dùng cho một tài khoản");
         }
-
-        // Xác thực OTP
-        otpService.verifyOtp(request.getEmail(), request.getEmailOtp(), "EMAIL");
-        // Tạm thời bỏ qua xác thực Phone OTP
-        // otpService.verifyOtp(request.getPhoneNumber(), request.getPhoneOtp(), "PHONE");
+        if (request.getPassword() == null || request.getPassword().isBlank() || request.getPassword().length() < 6
+                || request.getPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new BadRequestException("Mật khẩu phải có ít nhất 6 ký tự và không vượt quá 72 byte UTF-8");
+        }
         
         Role userRole = roleRepository.findByName(RoleEnum.REGISTERED_USER.name())
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+                .orElseThrow(() -> new IllegalStateException("Chưa cấu hình role REGISTERED_USER"));
+
+        contactVerificationService.consume(request.getVerificationToken(), email, phone);
 
         User newUser = User.builder()
                 .fullName(request.getFullName())
-                .phoneNumber(request.getPhoneNumber())
-                .email(request.getEmail())
+                .phoneNumber(phone)
+                .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(userRole)
                 .status(UserStatus.ACTIVE.name())
                 .reputationPoints(0)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now(applicationClock))
+                .updatedAt(LocalDateTime.now(applicationClock))
                 .build();
 
-        User savedUser = userRepository.save(newUser);
+        User savedUser;
+        try {
+            savedUser = userRepository.saveAndFlush(newUser);
+        } catch (DataIntegrityViolationException ex) {
+            if (ex.getMostSpecificCause() instanceof SQLException sql && "23505".equals(sql.getSQLState())) {
+                throw new RegistrationConflictException("Email hoặc số điện thoại đã được dùng cho một tài khoản");
+            }
+            throw ex;
+        }
 
         if (request.isReceiveAlerts()) {
             subscriptionService.subscribeAllCategories(savedUser);
@@ -115,6 +138,8 @@ public class AuthServiceImpl implements IAuthService {
                 Role userRole = roleRepository.findByName(RoleEnum.REGISTERED_USER.name())
                         .orElseThrow(() -> new RuntimeException("Role not found"));
 
+                otpService.verifyOtp(request.getPhoneNumber(), request.getPhoneOtp(), OtpType.PHONE);
+
                 // Tạo mật khẩu ngẫu nhiên (vì user login qua Google)
                 String randomPassword = UUID.randomUUID().toString();
 
@@ -126,8 +151,8 @@ public class AuthServiceImpl implements IAuthService {
                         .role(userRole)
                         .status("ACTIVE")
                         .reputationPoints(0)
-                        .createdAt(LocalDateTime.now())
-                        .updatedAt(LocalDateTime.now())
+                        .createdAt(LocalDateTime.now(applicationClock))
+                        .updatedAt(LocalDateTime.now(applicationClock))
                         .build();
 
                 User savedUser = userRepository.save(user);
@@ -139,6 +164,8 @@ public class AuthServiceImpl implements IAuthService {
             } else {
                 throw new IllegalArgumentException("Invalid Google ID token.");
             }
+        } catch (IllegalArgumentException | OtpRateLimitException | SmsProviderException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Lỗi xác thực Google Token: " + e.getMessage());
         }

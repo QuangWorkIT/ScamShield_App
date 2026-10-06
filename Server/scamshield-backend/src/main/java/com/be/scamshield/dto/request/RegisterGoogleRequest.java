@@ -18,6 +18,10 @@ public class RegisterGoogleRequest {
     @Pattern(regexp = "^0\\d{9}$", message = "Số điện thoại phải bắt đầu bằng số 0 và gồm đúng 10 chữ số")
     private String phoneNumber;
 
+    @NotBlank(message = "Mã OTP SMS không được để trống")
+    @Pattern(regexp = "^[0-9]{6}$", message = "Mã OTP SMS phải gồm 6 chữ số")
+    private String phoneOtp;
+
     @AssertTrue(message = "Bạn phải đồng ý với điều khoản sử dụng")
     private boolean agreeTerms;
 
