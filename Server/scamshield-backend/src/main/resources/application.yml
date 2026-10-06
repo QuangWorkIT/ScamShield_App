@@ -50,3 +50,10 @@ firebase:
   phone:
     api-key: ${FIREBASE_WEB_API_KEY:}
     max-requests-per24-hours: ${SMS_OTP_MAX_REQUESTS_PER_24_HOURS:10}
+
+# Application Configurations
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS}
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}

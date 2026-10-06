@@ -25,8 +25,16 @@ public class User {
     @Column(name = "email", unique = true, nullable = false)
     private String email;
 
+    public String getUsername() {
+        return email != null ? email : (phoneNumber != null ? phoneNumber : fullName);
+    }
+
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
+
+    @Builder.Default
+    @Column(name = "is_phone_verified", nullable = false, columnDefinition = "boolean default false")
+    private Boolean isPhoneVerified = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "role_id")
@@ -51,4 +59,27 @@ public class User {
     @Column(name = "last_login_at")
     private java.time.LocalDateTime lastLoginAt;
 
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = java.time.LocalDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = java.time.LocalDateTime.now();
+        }
+        if (status == null) {
+            status = "PENDING_VERIFICATION";
+        }
+        if (reputationPoints == null) {
+            reputationPoints = 0;
+        }
+        if (isPhoneVerified == null) {
+            isPhoneVerified = false;
+        }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = java.time.LocalDateTime.now();
+    }
 }
