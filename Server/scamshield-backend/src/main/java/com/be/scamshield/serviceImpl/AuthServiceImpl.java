@@ -269,9 +269,7 @@ public class AuthServiceImpl implements IAuthService {
         }
 
         if (currentUsername != null && !currentUsername.isBlank()) {
-            userRepository.findByEmail(currentUsername)
-                    .or(() -> userRepository.findByPhoneNumber(currentUsername))
-                    .or(() -> userRepository.findByUsername(currentUsername))
+            userRepository.findByEmailOrPhoneNumber(currentUsername)
                     .ifPresent(refreshTokenRepository::deleteByUser);
         }
 
@@ -288,9 +286,7 @@ public class AuthServiceImpl implements IAuthService {
     }
 
     private User findUserByUsernameOrEmailOrPhone(String identifier) {
-        return userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhoneNumber(identifier))
-                .or(() -> userRepository.findByUsername(identifier))
+        return userRepository.findByEmailOrPhoneNumber(identifier)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + identifier));
     }
 

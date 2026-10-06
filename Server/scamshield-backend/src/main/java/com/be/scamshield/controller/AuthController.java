@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Arrays;
 
 @RestController
-@RequestMapping({"/api/v1/auth", "/api/auth"})
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Tag(name = "Authentication & Authorization API", description = "Endpoints for Login, Register, OTP, Token Refresh, Change Password, Logout, and User Profile")
 public class AuthController {

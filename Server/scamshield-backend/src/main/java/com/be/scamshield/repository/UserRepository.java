@@ -13,15 +13,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByPhoneNumber(String phoneNumber);
 
-    Optional<User> findByUsername(String username);
-
-    Optional<User> findByUsernameOrEmail(String username, String email);
-
-    Optional<User> findByUsernameOrPhoneNumber(String username, String phoneNumber);
-
-    Optional<User> findByUsernameOrPhoneNumberOrEmail(String username, String phoneNumber, String email);
-
-    boolean existsByUsername(String username);
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.email = :identifier OR u.phoneNumber = :identifier")
+    Optional<User> findByEmailOrPhoneNumber(@org.springframework.data.repository.query.Param("identifier") String identifier);
 
     boolean existsByEmail(String email);
 
