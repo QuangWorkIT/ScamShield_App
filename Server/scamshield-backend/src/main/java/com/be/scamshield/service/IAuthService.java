@@ -1,6 +1,7 @@
 package com.be.scamshield.service;
 
 import com.be.scamshield.dto.*;
+import com.be.scamshield.dto.request.RegisterGoogleRequest;
 import com.be.scamshield.dto.request.RegisterPersonalRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -10,6 +11,11 @@ public interface IAuthService {
      * Registers a new personal user account.
      */
     void registerPersonal(RegisterPersonalRequest request);
+
+    /**
+     * Registers or authenticates a Google OAuth user.
+     */
+    void registerGoogle(RegisterGoogleRequest request);
 
     /**
      * Authenticates user with username, email, or phone number and password.

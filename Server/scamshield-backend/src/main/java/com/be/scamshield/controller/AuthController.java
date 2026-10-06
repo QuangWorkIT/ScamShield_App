@@ -1,6 +1,7 @@
 package com.be.scamshield.controller;
 
 import com.be.scamshield.dto.*;
+import com.be.scamshield.dto.request.RegisterGoogleRequest;
 import com.be.scamshield.dto.request.RegisterPersonalRequest;
 import com.be.scamshield.exception.UnauthorizedException;
 import com.be.scamshield.security.UserPrincipal;
@@ -113,6 +114,17 @@ public class AuthController {
         try {
             authService.registerPersonal(request);
             return ResponseEntity.ok(new BaseResponse<>(true, "Registration successful", null));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new BaseResponse<>(false, e.getMessage(), null));
+        }
+    }
+
+    @PostMapping("/register/google")
+    @Operation(summary = "Đăng ký bằng tài khoản Google")
+    public ResponseEntity<BaseResponse<Void>> registerGoogle(@Valid @RequestBody RegisterGoogleRequest request) {
+        try {
+            authService.registerGoogle(request);
+            return ResponseEntity.ok(new BaseResponse<>(true, "Google registration successful", null));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new BaseResponse<>(false, e.getMessage(), null));
         }
