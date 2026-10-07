@@ -6,12 +6,15 @@ import com.be.scamshield.entity.OtpVerification;
 import com.be.scamshield.exception.OtpRateLimitException;
 import com.be.scamshield.repository.OtpVerificationRepository;
 import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
@@ -21,6 +24,16 @@ public class SmsOtpReservationService {
     private final FirebasePhoneProperties properties;
     private final Clock applicationClock;
     private final PlatformTransactionManager transactionManager;
+
+    @Value("${app.otp.phone-expiration-ms}")
+    private long phoneOtpExpirationMs;
+
+    @PostConstruct
+    void validateExpiration() {
+        if (phoneOtpExpirationMs <= 0) {
+            throw new IllegalArgumentException("Thời gian hết hạn OTP điện thoại phải lớn hơn 0 ms");
+        }
+    }
 
     // Commit before the external call: errors/timeouts must not refund a potentially sent SMS.
     public synchronized OtpVerification reserve(String nationalPhone) {
@@ -44,6 +57,6 @@ public class SmsOtpReservationService {
         });
         return otpRepository.saveAndFlush(OtpVerification.builder()
                 .target(nationalPhone).type(OtpType.PHONE).provider("FIREBASE")
-                .createdAt(now).expiresAt(now.plusMinutes(5)).isVerified(false).failedAttempts(0).build());
+                .createdAt(now).expiresAt(now.plus(Duration.ofMillis(phoneOtpExpirationMs))).isVerified(false).failedAttempts(0).build());
     }
 }

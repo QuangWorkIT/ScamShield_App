@@ -8,6 +8,7 @@ import com.be.scamshield.exception.BadRequestException;
 import com.be.scamshield.exception.SmsProviderException;
 import com.be.scamshield.util.VietnamPhoneNumbers;
 import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -27,6 +28,7 @@ import java.io.IOException;
 
 import java.time.LocalDateTime;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Optional;
 import java.security.SecureRandom;
 import java.net.IDN;
@@ -41,6 +43,16 @@ public class OtpServiceImpl implements IOtpService {
     private final FirebasePhoneClient firebasePhoneClient;
     private final SmsOtpReservationService smsReservationService;
     private final Clock applicationClock;
+
+    @Value("${app.otp.email-expiration-ms}")
+    private long emailOtpExpirationMs;
+
+    @PostConstruct
+    void validateExpiration() {
+        if (emailOtpExpirationMs <= 0) {
+            throw new IllegalArgumentException("Thời gian hết hạn OTP email phải lớn hơn 0 ms");
+        }
+    }
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -85,7 +97,7 @@ public class OtpServiceImpl implements IOtpService {
                 .otpCode(otp)
                 .type(OtpType.EMAIL)
                 .createdAt(LocalDateTime.now(applicationClock))
-                .expiresAt(LocalDateTime.now(applicationClock).plusMinutes(5))
+                .expiresAt(LocalDateTime.now(applicationClock).plus(Duration.ofMillis(emailOtpExpirationMs)))
                 .isVerified(false)
                 .failedAttempts(0)
                 .build();
@@ -99,7 +111,8 @@ public class OtpServiceImpl implements IOtpService {
             helper.setTo(email);
             helper.setSubject("Mã xác thực ScamShield");
             
-            String htmlContent = getHtmlTemplate().replace("{{OTP_CODE}}", otp);
+            String htmlContent = getHtmlTemplate().replace("{{OTP_CODE}}", otp)
+                    .replace("{{OTP_EXPIRATION_SECONDS}}", Long.toString((long) Math.ceil(emailOtpExpirationMs / 1000.0)));
             helper.setText(htmlContent, true);
             
             mailSender.send(message);
@@ -132,6 +145,13 @@ public class OtpServiceImpl implements IOtpService {
     public boolean verifyOtp(String target, String otpCode, OtpType type) {
         markVerified(validateOtp(target, otpCode, type));
         return true;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = IllegalArgumentException.class)
+    public void verifyPhoneOtp(String phone, String phoneCode) {
+        // Consume the challenge in the verification transaction; token persistence failures restore it.
+        markVerified(validateContactOtp(phone, phoneCode, OtpType.PHONE, "điện thoại"));
     }
 
     @Override

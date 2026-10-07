@@ -53,6 +53,11 @@ firebase:
 
 # Application Configurations
 app:
+  otp:
+    email-expiration-ms: ${EMAIL_OTP_EXPIRATION_MS:300000}
+    phone-expiration-ms: ${PHONE_OTP_EXPIRATION_MS:300000}
+  contact-verification:
+    expiration-ms: ${CONTACT_VERIFICATION_EXPIRATION_MS:600000}
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS}

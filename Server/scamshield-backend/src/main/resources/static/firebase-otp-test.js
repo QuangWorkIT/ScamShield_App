@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-let verifier, auth, firebaseApp, modules, sentPhone, sentEmail, proof, busy = false, resendAt = 0;
+let verifier, auth, firebaseApp, modules, sentPhone, proof, busy = false, resendAt = 0;
 
 function show(message, kind = '', details = '') {
   $('status').textContent = message;
@@ -8,31 +8,22 @@ function show(message, kind = '', details = '') {
 }
 
 function updateButtons() {
-  if (proof && Date.now() >= proof.expires) {
-    proof = null;
-    sentEmail = null;
-    sentPhone = null;
-    $('form-gate').textContent = 'Xác nhận đã hết hạn; cần xác thực lại.';
-  }
+  if (proof && Date.now() >= proof.expires) { proof = null; sentPhone = null; }
   const seconds = Math.max(0, Math.ceil((resendAt - Date.now()) / 1000));
   $('connect').disabled = busy;
   $('send').disabled = busy || !verifier || seconds > 0;
   $('send').textContent = seconds ? `Gửi lại sau ${seconds}s` : 'Gửi OTP qua backend';
-  $('send-email').disabled = busy;
   $('phone').disabled = busy;
   $('email').disabled = busy;
-  $('verify').disabled = busy || !sentPhone || !sentEmail || !!proof;
+  $('verify').disabled = busy || !sentPhone || !!proof;
   $('partner-fields').disabled = busy || !proof;
-  if (proof) $('form-gate').textContent = `Đã xác thực ${proof.email} và ${proof.phone}. Có thể gửi hồ sơ trong ${Math.ceil((proof.expires - Date.now()) / 1000)} giây.`;
+  $('otp').disabled = busy;
+  $('form-gate').textContent = proof
+    ? `Điện thoại đã xác thực. Có thể gửi hồ sơ trong ${Math.ceil((proof.expires - Date.now()) / 1000)} giây.`
+    : 'Xác thực OTP điện thoại trước khi gửi hồ sơ.';
 }
 
-function invalidateProof() {
-  if (proof) { sentEmail = null; sentPhone = null; }
-  proof = null;
-  $('form-gate').textContent = 'Chưa xác thực email và điện thoại. Form đang khóa.';
-}
-$('email').addEventListener('input', () => { sentEmail = null; invalidateProof(); updateButtons(); });
-$('phone').addEventListener('input', () => { sentPhone = null; invalidateProof(); updateButtons(); });
+$('phone').addEventListener('input', () => { sentPhone = null; proof = null; $('otp').value = ''; updateButtons(); });
 $('legal-representative').addEventListener('change', () => {
   $('authorization').required = !$('legal-representative').checked;
 });
@@ -66,7 +57,7 @@ $('config-form').addEventListener('submit', async event => {
   busy = true;
   updateButtons();
   sentPhone = null;
-  invalidateProof();
+  proof = null;
   show('Đang khởi tạo Firebase…');
   try {
     const config = JSON.parse($('config').value);
@@ -97,8 +88,9 @@ $('config-form').addEventListener('submit', async event => {
 $('send-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (busy || !verifier || Date.now() < resendAt) return;
+  sentPhone = null;
+  proof = null;
   busy = true;
-  invalidateProof();
   updateButtons();
   show('Đang lấy reCAPTCHA token…');
   try {
@@ -128,53 +120,31 @@ $('send-form').addEventListener('submit', async event => {
 
 $('verify-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (busy || !sentPhone || !sentEmail || proof) return;
+  if (busy || !sentPhone || proof) return;
   busy = true;
   updateButtons();
-  show('Đang xác thực OTP…');
   try {
     const result = await callApi('/api/auth/verify-contacts', {
-      email: sentEmail, phoneNumber: sentPhone,
-      emailOtp: $('email-otp').value.trim(), phoneOtp: $('otp').value.trim(),
+      phoneNumber: sentPhone, phoneOtp: $('otp').value.trim(),
     }, true);
     if (result) proof = {
-      token: result.verificationToken, email: sentEmail, phone: sentPhone,
+      token: result.verificationToken, phone: sentPhone,
       expires: Date.parse(result.expiresAt + '+07:00'),
     };
-  } catch (error) {
-    show('Không xác thực được OTP', 'error', error.message);
-  } finally {
-    busy = false;
-    updateButtons();
-  }
-});
-
-$('email-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  if (busy) return;
-  busy = true;
-  invalidateProof();
-  updateButtons();
-  try {
-    const email = $('email').value.trim();
-    if (await callApi('/api/auth/send-email-otp', { email })) {
-      sentEmail = email;
-      $('email-otp').value = '';
-    }
-  } catch (error) {
-    show('Không gửi được OTP email', 'error', error.message);
-  } finally { busy = false; updateButtons(); }
+  } catch (error) { show('Không xác thực được OTP điện thoại', 'error', error.message); }
+  finally { busy = false; updateButtons(); }
 });
 
 $('partner-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (busy || !proof || Date.now() >= proof.expires) { updateButtons(); return; }
+  if (!$('email').reportValidity()) return;
   busy = true;
   updateButtons();
   const split = id => $(id).value.split(',').map(value => value.trim()).filter(Boolean);
   const request = {
     legalName: $('legal-name').value.trim(), taxCode: $('tax-code').value.trim(),
-    corporateEmail: proof.email, contactPhone: proof.phone, verificationToken: proof.token,
+    corporateEmail: $('email').value.trim(), contactPhone: proof.phone, verificationToken: proof.token,
     password: $('password').value, representativeNameAndTitle: $('representative').value.trim(),
     officialDomains: split('domains'), officialHotlines: split('hotlines'), smsBrandNames: split('brands'),
     legalRepresentative: $('legal-representative').checked, agreeTerms: $('terms').checked,
@@ -186,11 +156,10 @@ $('partner-form').addEventListener('submit', async event => {
   }
   try {
     if (await callApi('/api/partners/registrations', body)) {
-      invalidateProof();
       $('form-gate').textContent = 'Hồ sơ đã gửi thành công, đang chờ duyệt.';
       $('password').value = '';
-      sentEmail = null;
       sentPhone = null;
+      proof = null;
     }
   } catch (error) { show('Không gửi được hồ sơ', 'error', error.message); }
   finally { busy = false; updateButtons(); }

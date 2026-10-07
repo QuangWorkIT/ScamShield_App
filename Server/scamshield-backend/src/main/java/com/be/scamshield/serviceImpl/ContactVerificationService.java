@@ -10,6 +10,8 @@ import com.be.scamshield.repository.UserRepository;
 import com.be.scamshield.service.IOtpService;
 import com.be.scamshield.util.VietnamPhoneNumbers;
 import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -34,38 +37,45 @@ public class ContactVerificationService {
     private final ContactVerificationRepository verificationRepository;
     private final Clock applicationClock;
 
+    @Value("${app.contact-verification.expiration-ms}")
+    private long verificationExpirationMs;
+
+    @PostConstruct
+    void validateExpiration() {
+        if (verificationExpirationMs <= 0) {
+            throw new IllegalArgumentException("Thời gian hết hạn Token xác nhận điện thoại phải lớn hơn 0 ms");
+        }
+    }
+
     @Transactional(noRollbackFor = IllegalArgumentException.class)
     public ContactVerificationResponse verifyContacts(VerifyContactsRequest request) {
-        String email = normalizeEmail(request.getEmail());
         String phone = VietnamPhoneNumbers.nationalMobile(request.getPhoneNumber());
-        if (userRepository.existsByEmailIgnoreCase(email) || userRepository.findByPhoneNumber(phone).isPresent()) {
-            throw new RegistrationConflictException("Email hoặc số điện thoại đã được dùng cho một tài khoản");
+        if (userRepository.findByPhoneNumber(phone).isPresent()) {
+            throw new RegistrationConflictException("Số điện thoại đã được dùng cho một tài khoản");
         }
-        if (!otpService.verifyContactOtps(email, request.getEmailOtp(), phone, request.getPhoneOtp())) {
-            throw new IllegalArgumentException("OTP email hoặc điện thoại không hợp lệ");
-        }
+        otpService.verifyPhoneOtp(phone, request.getPhoneOtp());
         byte[] bytes = new byte[32];
         TOKEN_RANDOM.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        LocalDateTime expiresAt = LocalDateTime.now(applicationClock).plusMinutes(10);
+        LocalDateTime expiresAt = LocalDateTime.now(applicationClock).plus(Duration.ofMillis(verificationExpirationMs));
         verificationRepository.saveAndFlush(ContactVerification.builder()
-                .tokenHash(hashToken(token)).email(email).phoneNumber(phone).expiresAt(expiresAt).build());
+                .tokenHash(hashToken(token)).phoneNumber(phone).expiresAt(expiresAt).build());
         return new ContactVerificationResponse(token, expiresAt);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void consume(String token, String email, String phone) {
+    public void consume(String token, String phone) {
         if (token == null || !token.matches("[A-Za-z0-9_-]{43}")) {
-            throw new BadRequestException("Cần xác thực email và điện thoại trước khi đăng ký");
+            throw new BadRequestException("Cần xác thực điện thoại trước khi đăng ký");
         }
         ContactVerification verification = verificationRepository.findLockedByTokenHash(hashToken(token))
-                .orElseThrow(() -> new BadRequestException("Mã xác nhận liên hệ không hợp lệ"));
+                .orElseThrow(() -> new BadRequestException("Mã xác nhận điện thoại không hợp lệ"));
         LocalDateTime now = LocalDateTime.now(applicationClock);
         if (verification.getUsedAt() != null || !verification.getExpiresAt().isAfter(now)) {
             throw new BadRequestException("Mã xác nhận đã dùng hoặc hết hạn; vui lòng xác thực lại");
         }
-        if (!verification.getEmail().equals(email) || !verification.getPhoneNumber().equals(phone)) {
-            throw new BadRequestException("Email hoặc điện thoại đã thay đổi; vui lòng xác thực lại");
+        if (!verification.getPhoneNumber().equals(VietnamPhoneNumbers.nationalMobile(phone))) {
+            throw new BadRequestException("Số điện thoại đã thay đổi; vui lòng xác thực lại");
         }
         verification.setUsedAt(now);
         verificationRepository.saveAndFlush(verification);

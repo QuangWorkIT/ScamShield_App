@@ -53,7 +53,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-@SpringBootTest(useMainMethod = SpringBootTest.UseMainMethod.ALWAYS)
+@SpringBootTest(useMainMethod = SpringBootTest.UseMainMethod.ALWAYS,
+        properties = "app.contact-verification.expiration-ms=120000")
 @ActiveProfiles("test")
 class PartnerRegistrationPersistenceTest {
     @Autowired
@@ -143,6 +144,7 @@ class PartnerRegistrationPersistenceTest {
             assertThat(user.getPhoneNumber()).isEqualTo("0912345678");
             assertThat(user.getRole().getName()).isEqualTo(RoleEnum.BUSINESS_PARTNER.name());
             assertThat(user.getStatus()).isEqualTo(UserStatus.INACTIVE.name());
+            assertThat(user.getIsPhoneVerified()).isTrue();
             assertThat(user.getPasswordHash()).isNotEqualTo(request.getPassword());
             assertThat(passwordEncoder.matches(request.getPassword(), user.getPasswordHash())).isTrue();
             assertThat(profileRepository.findById(response.getRegistrationId()).orElseThrow().getUser().getId())
@@ -158,7 +160,7 @@ class PartnerRegistrationPersistenceTest {
                     assertThat(document.getPartner().getId()).isEqualTo(profile.getId()));
         });
         assertThat(jdbc.queryForObject("select count(*) from whitelist_entries", Long.class)).isZero();
-        assertThat(jdbc.queryForObject("select is_verified from otp_verifications where type='EMAIL'", Boolean.class)).isTrue();
+        assertThat(jdbc.queryForObject("select is_verified from otp_verifications where type='EMAIL'", Boolean.class)).isFalse();
     }
 
     @Test
@@ -175,36 +177,6 @@ class PartnerRegistrationPersistenceTest {
         assertThat(stored.getBrandName()).isEqualTo("Existing brand");
         assertThat(stored.getTaxCode()).isNull();
         assertThat(stored.getVerifiedAt()).isNotNull();
-    }
-
-    @Test
-    void wrongEmailOtpPersistsFailedAttemptsWithoutConsumingSmsOrCreatingAccount() {
-        VerifyContactsRequest contacts = contacts();
-        contacts.setEmailOtp("000000");
-        for (int attempt = 0; attempt < 6; attempt++) {
-            assertThatThrownBy(() -> contactVerificationService.verifyContacts(contacts))
-                    .isInstanceOf(IllegalArgumentException.class);
-        }
-        assertThat(jdbc.queryForObject("select failed_attempts from otp_verifications where type='EMAIL'", Integer.class)).isEqualTo(5);
-        assertThat(jdbc.queryForObject("select is_verified from otp_verifications where type='PHONE'", Boolean.class)).isFalse();
-        assertThat(userRepository.count()).isZero();
-        assertThat(profileRepository.count()).isZero();
-        verifyNoInteractions(firebasePhoneClient);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"expired", "consumed"})
-    void rejectsExpiredOrConsumedEmailOtp(String state) {
-        if (state.equals("expired")) {
-            jdbc.update("update otp_verifications set expires_at=? where type='EMAIL'", LocalDateTime.now(applicationClock).minusMinutes(1));
-        } else {
-            jdbc.update("update otp_verifications set is_verified=true where type='EMAIL'");
-        }
-        assertThatThrownBy(() -> contactVerificationService.verifyContacts(contacts()))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThat(userRepository.count()).isZero();
-        assertThat(profileRepository.count()).isZero();
-        verifyNoInteractions(firebasePhoneClient);
     }
 
     @Test
@@ -250,7 +222,7 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @Test
-    void wrongSmsDoesNotConsumeEmailAndRetryWithTheSameEmailCodeVerifiesBoth() {
+    void wrongSmsDoesNotVerifyPhoneAndRetryIssuesPhoneToken() {
         VerifyContactsRequest contacts = contacts();
         contacts.setPhoneOtp("000000");
         doThrow(new IllegalArgumentException("invalid OTP")).when(firebasePhoneClient)
@@ -263,7 +235,7 @@ class PartnerRegistrationPersistenceTest {
 
         contacts.setPhoneOtp("123456");
         assertThat(contactVerificationService.verifyContacts(contacts).getVerificationToken()).hasSize(43);
-        assertThat(jdbc.queryForObject("select count(*) from otp_verifications where is_verified=true", Long.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select count(*) from otp_verifications where is_verified=true", Long.class)).isEqualTo(1);
         assertThat(verificationRepository.count()).isEqualTo(1);
     }
 
@@ -290,14 +262,14 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"expired", "used", "email", "phone", "unknown"})
-    void cannotSubmitFormWithExpiredUsedUnboundOrUnknownVerification(String state) {
+    @ValueSource(strings = {"expired", "used", "phone", "missing", "unknown"})
+    void partnerRequiresValidPhoneVerificationToken(String state) {
         prepareVerification();
         switch (state) {
             case "expired" -> jdbc.update("update contact_verifications set expires_at=?", LocalDateTime.now(applicationClock).minusMinutes(1));
             case "used" -> jdbc.update("update contact_verifications set used_at=?", LocalDateTime.now(applicationClock));
-            case "email" -> request.setCorporateEmail("another@gmail.com");
             case "phone" -> request.setContactPhone("0912345679");
+            case "missing" -> request.setVerificationToken(null);
             case "unknown" -> request.setVerificationToken("x".repeat(43));
             default -> throw new IllegalStateException();
         }
@@ -307,12 +279,17 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @Test
-    void verificationAloneDoesNotCreateAccountAndSubmissionConsumesToken() {
+    void verifyPhoneBeforeFormAndRegistrationConsumesOnlyToken() {
+        LocalDateTime beforeVerification = LocalDateTime.now(applicationClock);
         prepareVerification();
+        assertThat(verificationRepository.findAll().getFirst().getExpiresAt())
+                .isCloseTo(beforeVerification.plusMinutes(2), within(1, ChronoUnit.SECONDS));
         assertThat(userRepository.count()).isZero();
-        assertThat(profileRepository.count()).isZero();
+        assertThat(jdbc.queryForObject("select is_verified from otp_verifications where type='PHONE'", Boolean.class)).isTrue();
+        request.setCorporateEmail("different@gmail.com");
         service.register(request, files, files, null);
         assertThat(verificationRepository.findAll().getFirst().getUsedAt()).isNotNull();
+        assertThat(jdbc.queryForObject("select is_verified from otp_verifications where type='EMAIL'", Boolean.class)).isFalse();
     }
 
     private void prepareVerification() {
@@ -320,7 +297,8 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @Test
-    void sharedContactProofCreatesPersonalAccountWithoutPartnerProfile() {
+    void phoneTokenCreatesPersonalAccountWithoutEmailOtpOrPartnerProfile() {
+        otpRepository.deleteAll(otpRepository.findAll().stream().filter(otp -> otp.getType() == OtpType.EMAIL).toList());
         prepareVerification();
         RegisterPersonalRequest personal = personal();
         personal.setEmail("CONTACT@EXAMPLE.COM.VN");
@@ -332,13 +310,14 @@ class PartnerRegistrationPersistenceTest {
             User user = userRepository.findAll().getFirst();
             assertThat(user.getEmail()).isEqualTo("contact@example.com.vn");
             assertThat(user.getPhoneNumber()).isEqualTo("0912345678");
+            assertThat(user.getIsPhoneVerified()).isTrue();
             assertThat(user.getRole().getName()).isEqualTo(RoleEnum.REGISTERED_USER.name());
             assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE.name());
             assertThat(passwordEncoder.matches(personal.getPassword(), user.getPasswordHash())).isTrue();
         });
         assertThat(verificationRepository.findAll().getFirst().getUsedAt()).isNotNull();
         assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status ->
-                contactVerificationService.consume(personal.getVerificationToken(), "contact@example.com.vn", "0912345678")))
+                contactVerificationService.consume(personal.getVerificationToken(), "0912345678")))
                 .isInstanceOf(BadRequestException.class).hasMessageContaining("đã dùng");
     }
 
@@ -355,8 +334,8 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"missing", "unknown", "expired", "used", "email", "phone"})
-    void personalRegistrationRequiresUnusedProofForTheSameContacts(String state) {
+    @ValueSource(strings = {"missing", "unknown", "expired", "used", "phone"})
+    void personalRegistrationRequiresValidPhoneVerificationToken(String state) {
         prepareVerification();
         RegisterPersonalRequest personal = personal();
         switch (state) {
@@ -364,7 +343,6 @@ class PartnerRegistrationPersistenceTest {
             case "unknown" -> personal.setVerificationToken("x".repeat(43));
             case "expired" -> jdbc.update("update contact_verifications set expires_at=?", LocalDateTime.now(applicationClock).minusMinutes(1));
             case "used" -> jdbc.update("update contact_verifications set used_at=?", LocalDateTime.now(applicationClock));
-            case "email" -> personal.setEmail("other@gmail.com");
             case "phone" -> personal.setPhoneNumber("0912345679");
             default -> throw new IllegalStateException();
         }
@@ -373,7 +351,7 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @Test
-    void personalRegistrationFailureRollsBackAccountAndProofSoSubmissionCanRetry() {
+    void personalRegistrationFailureRollsBackAccountAndTokenSoSubmissionCanRetry() {
         prepareVerification();
         RegisterPersonalRequest personal = personal();
         personal.setReceiveAlerts(true);
@@ -398,7 +376,7 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @Test
-    void parallelPersonalAndPartnerRegistrationCannotConsumeTheSameProofTwice() throws Exception {
+    void parallelPersonalAndPartnerRegistrationCannotConsumeTheSameTokenTwice() throws Exception {
         prepareVerification();
         RegisterPersonalRequest personal = personal();
         try (var executor = Executors.newFixedThreadPool(2)) {
@@ -421,14 +399,12 @@ class PartnerRegistrationPersistenceTest {
             assertThat((personalResult.get() ? 1 : 0) + (partnerResult.get() ? 1 : 0)).isEqualTo(1);
         }
         assertThat(userRepository.count()).isEqualTo(1);
-        assertThat(verificationRepository.findAll().getFirst().getUsedAt()).isNotNull();
+        assertThat(jdbc.queryForObject("select is_verified from otp_verifications where type='PHONE'", Boolean.class)).isTrue();
     }
 
     private VerifyContactsRequest contacts() {
         VerifyContactsRequest contacts = new VerifyContactsRequest();
-        contacts.setEmail(request.getCorporateEmail());
         contacts.setPhoneNumber(request.getContactPhone());
-        contacts.setEmailOtp("654321");
         contacts.setPhoneOtp("123456");
         return contacts;
     }

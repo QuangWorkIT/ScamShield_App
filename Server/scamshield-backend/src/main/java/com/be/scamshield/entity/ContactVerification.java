@@ -22,8 +22,10 @@ public class ContactVerification {
     @Id
     @Column(length = 64)
     private String tokenHash;
+    // Legacy column retained to avoid a schema migration; phone-only grants leave it empty.
+    @Builder.Default
     @Column(nullable = false, length = 254)
-    private String email;
+    private String email = "";
     @Column(nullable = false, length = 30)
     private String phoneNumber;
     @Column(nullable = false)

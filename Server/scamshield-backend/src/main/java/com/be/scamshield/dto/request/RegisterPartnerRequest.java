@@ -31,9 +31,9 @@ public class RegisterPartnerRequest {
     @Schema(description = "Email tạo tài khoản; chấp nhận email cá nhân hoặc doanh nghiệp", example = "partner@gmail.com")
     private String corporateEmail;
 
-    @NotBlank(message = "Cần xác thực OTP email và điện thoại trước khi gửi hồ sơ")
-    @Pattern(regexp = "[A-Za-z0-9_-]{43}", message = "Mã xác nhận liên hệ không hợp lệ")
-    @Schema(description = "Token từ /api/auth/verify-contacts; hết hạn sau 10 phút", accessMode = Schema.AccessMode.WRITE_ONLY)
+    @NotBlank(message = "Cần xác thực điện thoại trước khi đăng ký")
+    @Pattern(regexp = "[A-Za-z0-9_-]{43}", message = "Mã xác nhận điện thoại không hợp lệ")
+    @Schema(description = "Token từ /api/auth/verify-contacts sau khi xác thực OTP điện thoại; hạn dùng được trả trong expiresAt", accessMode = Schema.AccessMode.WRITE_ONLY)
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @ToString.Exclude
     private String verificationToken;
@@ -51,6 +51,8 @@ public class RegisterPartnerRequest {
 
     @NotBlank(message = "Số điện thoại liên hệ không được để trống")
     @Size(max = 30, message = "Số điện thoại liên hệ tối đa 30 ký tự")
+    @Pattern(regexp = "^[\\s().-]*(?:0|\\+[\\s().-]*8[\\s().-]*4)[\\s().-]*[35789](?:[\\s().-]*[0-9]){8}[\\s().-]*$",
+            message = "Số điện thoại liên hệ phải là số di động Việt Nam hợp lệ, ví dụ 0912345678 hoặc +84912345678")
     private String contactPhone;
 
     @NotEmpty(message = "Cần ít nhất một tên miền chính thống")

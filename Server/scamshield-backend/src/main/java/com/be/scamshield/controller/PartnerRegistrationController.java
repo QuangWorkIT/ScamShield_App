@@ -30,7 +30,7 @@ public class PartnerRegistrationController {
     private final IPartnerRegistrationService registrationService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Tạo tài khoản và nộp hồ sơ đối tác", description = "Cần verificationToken từ bước xác thực email và điện thoại trước. Part request là JSON có password; tài liệu PDF/JPG/PNG tối đa 25MB/tệp. Tạo tài khoản BUSINESS_PARTNER trạng thái INACTIVE và hồ sơ PENDING, chờ duyệt.",
+    @Operation(summary = "Tạo tài khoản và nộp hồ sơ đối tác", description = "Cần verificationToken từ /api/auth/verify-contacts sau khi xác thực điện thoại. Part request là JSON có password; tài liệu PDF/JPG/PNG tối đa 25MB/tệp. Tạo tài khoản BUSINESS_PARTNER trạng thái INACTIVE và hồ sơ PENDING, chờ duyệt.",
             requestBody = @RequestBody(content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
                     encoding = @Encoding(name = "request", contentType = MediaType.APPLICATION_JSON_VALUE))))
     public ResponseEntity<BaseResponse<PartnerRegistrationResponse>> register(

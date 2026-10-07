@@ -1,6 +1,10 @@
 package com.be.scamshield.controller;
 
 import com.be.scamshield.config.SecurityConfig;
+import com.be.scamshield.security.JwtTokenProvider;
+import com.be.scamshield.security.JwtAuthenticationEntryPoint;
+import com.be.scamshield.security.CustomAccessDeniedHandler;
+import com.be.scamshield.security.CustomUserDetailsService;
 import com.be.scamshield.exception.OtpRateLimitException;
 import com.be.scamshield.exception.SmsProviderException;
 import com.be.scamshield.service.IAuthService;
@@ -12,6 +16,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -29,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AuthController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, JwtAuthenticationEntryPoint.class, CustomAccessDeniedHandler.class})
 class SmsOtpControllerTest {
     private static final String PERSONAL_JSON = """
             {"fullName":"Nguyễn Văn An","email":"user@gmail.com","phoneNumber":"0912345678",
@@ -44,16 +49,19 @@ class SmsOtpControllerTest {
     private IOtpService otpService;
     @MockitoBean
     private ContactVerificationService contactVerificationService;
+    @MockitoBean
+    private JwtTokenProvider tokenProvider;
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
 
     @ParameterizedTest
-    @ValueSource(strings = {"email", "điện thoại"})
+    @ValueSource(strings = {"điện thoại"})
     void verificationFailureDisplaysTheInvalidOtpChannel(String channel) throws Exception {
         String message = "OTP " + channel + " không hợp lệ: Vui lòng gửi yêu cầu lấy mã OTP mới";
         when(contactVerificationService.verifyContacts(any())).thenThrow(new IllegalArgumentException(message));
         mvc.perform(post("/api/auth/verify-contacts").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"user@gmail.com","phoneNumber":"0912345678",
-                                 "emailOtp":"654321","phoneOtp":"123456"}
+                                {"phoneNumber":"0912345678","phoneOtp":"123456"}
                                 """))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.message").value(message))
@@ -61,13 +69,12 @@ class SmsOtpControllerTest {
     }
 
     @Test
-    void guestCanVerifyBothContactsThroughTheSharedPublicEndpoint() throws Exception {
+    void guestCanVerifyPhoneWithoutEmailThroughTheSharedPublicEndpoint() throws Exception {
         when(contactVerificationService.verifyContacts(any())).thenReturn(
                 new ContactVerificationResponse("x".repeat(43), LocalDateTime.of(2026, 10, 6, 10, 0)));
         mvc.perform(post("/api/auth/verify-contacts").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"user@gmail.com","phoneNumber":"0912345678",
-                                 "emailOtp":"654321","phoneOtp":"123456"}
+                                {"phoneNumber":"0912345678","phoneOtp":"123456"}
                                 """))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.data.verificationToken").value("x".repeat(43)))
@@ -75,32 +82,52 @@ class SmsOtpControllerTest {
         verifyNoInteractions(authService);
     }
 
-    @Test
-    void sharedVerificationValidatesContactsAndBothCodes() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"0912345678", "+84912345678", "+84 912 345 678", "(0912) 345-678", "0391234567"})
+    void verificationAcceptsSupportedVietnameseMobileFormats(String phone) throws Exception {
+        when(contactVerificationService.verifyContacts(any())).thenReturn(
+                new ContactVerificationResponse("x".repeat(43), LocalDateTime.of(2026, 10, 6, 10, 0)));
         mvc.perform(post("/api/auth/verify-contacts").contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"invalid","phoneNumber":"","emailOtp":"123","phoneOtp":""}
-                                """))
+                        .content("{\"phoneNumber\":\"" + phone + "\",\"phoneOtp\":\"123456\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.isSuccess").value(true));
+        verify(contactVerificationService).verifyContacts(any());
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "091234567", "09123456789", "0212345678", "+840912345678", "+19123456789", "09abc45678", "19001234"})
+    void verificationRejectsInvalidPhoneBeforeCallingService(String phone) throws Exception {
+        String phoneJson = phone == null ? "null" : "\"" + phone + "\"";
+        mvc.perform(post("/api/auth/verify-contacts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phoneNumber\":" + phoneJson + ",\"phoneOtp\":\"123456\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.isSuccess").value(false))
-                .andExpect(jsonPath("$.data.email").exists()).andExpect(jsonPath("$.data.phoneNumber").exists())
-                .andExpect(jsonPath("$.data.emailOtp").exists()).andExpect(jsonPath("$.data.phoneOtp").exists());
+                .andExpect(jsonPath("$.data.phoneNumber").exists());
         verifyNoInteractions(contactVerificationService);
     }
 
     @Test
-    void personalRegistrationAcceptsProofAndDoesNotRequireOtpCodesAgain() throws Exception {
+    void verificationValidatesPhoneAndPhoneOtpOnly() throws Exception {
+        mvc.perform(post("/api/auth/verify-contacts").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phoneNumber":"","phoneOtp":""}
+                                """))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.data.phoneNumber").exists()).andExpect(jsonPath("$.data.phoneOtp").exists());
+        verifyNoInteractions(contactVerificationService);
+    }
+
+    @Test
+    void personalRegistrationAcceptsPhoneVerificationTokenWithoutOtp() throws Exception {
         mvc.perform(post("/api/auth/register/personal").contentType(MediaType.APPLICATION_JSON).content(PERSONAL_JSON))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.isSuccess").value(true));
         verify(authService).registerPersonal(any());
     }
 
     @Test
-    void personalRegistrationCannotBypassPreVerificationWithLegacyOtpFields() throws Exception {
+    void personalRegistrationRequiresVerificationTokenEvenWithRawPhoneOtp() throws Exception {
         mvc.perform(post("/api/auth/register/personal").contentType(MediaType.APPLICATION_JSON)
-                        .content(PERSONAL_JSON.replace("\"verificationToken\":\"" + "x".repeat(43) + "\",",
-                                "\"emailOtp\":\"654321\",\"phoneOtp\":\"123456\",")))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.isSuccess").value(false))
-                .andExpect(jsonPath("$.data.verificationToken").exists());
+                        .content(PERSONAL_JSON.replace("\"verificationToken\":\"" + "x".repeat(43) + "\",", "\"phoneOtp\":\"123456\",")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.verificationToken").exists());
         verify(authService, never()).registerPersonal(any());
     }
 

@@ -34,9 +34,9 @@ public class RegisterPersonalRequest {
     @ToString.Exclude
     private String password;
 
-    @NotBlank(message = "Cần xác thực email và điện thoại trước khi đăng ký")
-    @Pattern(regexp = "[A-Za-z0-9_-]{43}", message = "Mã xác nhận liên hệ không hợp lệ")
-    @Schema(description = "Token từ /api/auth/verify-contacts, hạn 10 phút", accessMode = Schema.AccessMode.WRITE_ONLY)
+    @NotBlank(message = "Cần xác thực điện thoại trước khi đăng ký")
+    @Pattern(regexp = "[A-Za-z0-9_-]{43}", message = "Mã xác nhận điện thoại không hợp lệ")
+    @Schema(description = "Token từ /api/auth/verify-contacts sau khi xác thực OTP điện thoại; hạn dùng được trả trong expiresAt", accessMode = Schema.AccessMode.WRITE_ONLY)
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @ToString.Exclude
     private String verificationToken;

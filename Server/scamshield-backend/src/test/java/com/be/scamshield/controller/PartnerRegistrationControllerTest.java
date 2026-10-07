@@ -2,12 +2,14 @@ package com.be.scamshield.controller;
 
 import com.be.scamshield.constant.PartnerVerificationStatus;
 import com.be.scamshield.dto.response.PartnerRegistrationResponse;
-import com.be.scamshield.dto.response.ContactVerificationResponse;
 import com.be.scamshield.config.SecurityConfig;
+import com.be.scamshield.security.JwtTokenProvider;
+import com.be.scamshield.security.JwtAuthenticationEntryPoint;
+import com.be.scamshield.security.CustomAccessDeniedHandler;
+import com.be.scamshield.security.CustomUserDetailsService;
 import com.be.scamshield.config.PartnerMultipartConfig;
 import com.be.scamshield.exception.RegistrationConflictException;
 import com.be.scamshield.service.IPartnerRegistrationService;
-import com.be.scamshield.serviceImpl.ContactVerificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -28,12 +30,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PartnerRegistrationController.class)
-@Import({SecurityConfig.class, PartnerMultipartConfig.class})
+@Import({SecurityConfig.class, PartnerMultipartConfig.class, JwtAuthenticationEntryPoint.class, CustomAccessDeniedHandler.class})
 class PartnerRegistrationControllerTest {
     private static final String URL = "/api/partners/registrations";
     private static final String VALID_JSON = """
@@ -46,7 +47,9 @@ class PartnerRegistrationControllerTest {
     @MockitoBean
     private IPartnerRegistrationService service;
     @MockitoBean
-    private ContactVerificationService contactVerificationService;
+    private JwtTokenProvider tokenProvider;
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
     @Autowired
     private MockMvc mvc;
 
@@ -80,6 +83,26 @@ class PartnerRegistrationControllerTest {
         verifyNoInteractions(service);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"0912345678", "+84912345678", "+84 912 345 678", "(0912) 345-678"})
+    void acceptsSupportedContactPhoneFormats(String phone) throws Exception {
+        when(service.register(any(), any(), any(), any())).thenReturn(
+                new PartnerRegistrationResponse(42L, 7L, PartnerVerificationStatus.PENDING, LocalDateTime.of(2026, 10, 6, 10, 0)));
+        mvc.perform(multipart(URL).file(json(VALID_JSON.replace("0912345678", phone))))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.isSuccess").value(true));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "091234567", "09123456789", "0212345678", "+840912345678", "+19123456789", "19001234"})
+    void rejectsInvalidContactPhoneBeforeRegistration(String phone) throws Exception {
+        String value = phone == null ? "null" : "\"" + phone + "\"";
+        mvc.perform(multipart(URL).file(json(VALID_JSON.replace("\"contactPhone\":\"0912345678\"", "\"contactPhone\":" + value))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.data.contactPhone").exists());
+        verifyNoInteractions(service);
+    }
+
     @Test
     void requiresVerificationTokenBeforeSubmittingForm() throws Exception {
         mvc.perform(multipart(URL).file(json(VALID_JSON.replace("\"verificationToken\":\"" + "x".repeat(43) + "\",", ""))))
@@ -87,29 +110,12 @@ class PartnerRegistrationControllerTest {
         verifyNoInteractions(service);
     }
 
-    @Test
-    void requiresEmailOtp() throws Exception {
-        mvc.perform(post(URL + "/verify-contacts").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"corporateEmail\":\"partner@gmail.com\",\"contactPhone\":\"0912345678\",\"phoneOtp\":\"123456\"}"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.emailOtp").exists());
-        verifyNoInteractions(service);
-    }
-
     @ParameterizedTest
     @ValueSource(strings = {"", "12345", "abcdef"})
-    void rejectsMalformedEmailOtp(String code) throws Exception {
-        mvc.perform(post(URL + "/verify-contacts").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"corporateEmail\":\"partner@gmail.com\",\"contactPhone\":\"0912345678\",\"phoneOtp\":\"123456\",\"emailOtp\":\"" + code + "\"}"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.emailOtp").exists());
+    void rejectsMalformedVerificationToken(String code) throws Exception {
+        mvc.perform(multipart(URL).file(json(VALID_JSON.replace("x".repeat(43), code))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.verificationToken").exists());
         verifyNoInteractions(service);
-    }
-
-    @Test
-    void verifiesContactsBeforeFormWithoutLogin() throws Exception {
-        when(contactVerificationService.verifyContacts(any())).thenReturn(new ContactVerificationResponse("x".repeat(43), LocalDateTime.of(2026, 10, 6, 10, 0)));
-        mvc.perform(post(URL + "/verify-contacts").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"corporateEmail\":\"partner@gmail.com\",\"contactPhone\":\"0912345678\",\"phoneOtp\":\"123456\",\"emailOtp\":\"654321\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.verificationToken").value("x".repeat(43)));
     }
 
     @Test

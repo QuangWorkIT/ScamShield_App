@@ -45,6 +45,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.UUID;
@@ -87,11 +88,12 @@ public class AuthServiceImpl implements IAuthService {
         Role userRole = roleRepository.findByName(RoleEnum.REGISTERED_USER.name())
                 .orElseThrow(() -> new IllegalStateException("Chưa cấu hình role REGISTERED_USER"));
 
-        contactVerificationService.consume(request.getVerificationToken(), email, phone);
+        contactVerificationService.consume(request.getVerificationToken(), phone);
 
         User newUser = User.builder()
                 .fullName(request.getFullName())
                 .phoneNumber(phone)
+                .isPhoneVerified(true)
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(userRole)
@@ -182,7 +184,7 @@ public class AuthServiceImpl implements IAuthService {
             } else {
                 throw new IllegalArgumentException("Invalid Google ID token.");
             }
-        } catch (IllegalArgumentException | OtpRateLimitException | SmsProviderException e) {
+        } catch (IllegalArgumentException | BadRequestException | OtpRateLimitException | SmsProviderException e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Lỗi xác thực Google Token: " + e.getMessage());
@@ -317,7 +319,7 @@ public class AuthServiceImpl implements IAuthService {
 
     private void saveRefreshToken(User user, String refreshTokenStr) {
         String tokenHash = hashToken(refreshTokenStr);
-        LocalDateTime expiresAt = LocalDateTime.now().plusNanos(tokenProvider.getRefreshExpirationInMs() * 1_000_000L);
+        LocalDateTime expiresAt = LocalDateTime.now().plus(Duration.ofMillis(tokenProvider.getRefreshExpirationInMs()));
 
         RefreshToken refreshToken = RefreshToken.builder()
                 .user(user)

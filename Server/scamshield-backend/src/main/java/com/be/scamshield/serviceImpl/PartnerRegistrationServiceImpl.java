@@ -135,11 +135,12 @@ public class PartnerRegistrationServiceImpl implements IPartnerRegistrationServi
         addDocuments(documents, authorizationFiles, "AUTHORIZATION", profile, now);
         Role partnerRole = roleRepository.findByName(RoleEnum.BUSINESS_PARTNER.name())
                 .orElseThrow(() -> new IllegalStateException("Chưa cấu hình role BUSINESS_PARTNER"));
-        contactVerificationService.consume(request.getVerificationToken(), email, profile.getContactPhone());
+        contactVerificationService.consume(request.getVerificationToken(), profile.getContactPhone());
         User user = User.builder()
                 .fullName(profile.getRepresentativeNameAndTitle())
                 .email(email)
                 .phoneNumber(profile.getContactPhone())
+                .isPhoneVerified(true)
                 .passwordHash(passwordEncoder.encode(password))
                 .role(partnerRole)
                 .status(UserStatus.INACTIVE.name())

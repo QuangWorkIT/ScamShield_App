@@ -11,8 +11,8 @@ import com.be.scamshield.repository.ContactVerificationRepository;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.time.LocalDateTime;
-import java.util.Locale;
 import org.mockito.Spy;
+import org.springframework.test.util.ReflectionTestUtils;
 import com.be.scamshield.dto.response.PartnerRegistrationResponse;
 import com.be.scamshield.entity.PartnerProfile;
 import com.be.scamshield.entity.PartnerDocument;
@@ -83,6 +83,7 @@ class PartnerRegistrationServiceImplTest {
     @BeforeEach
     void setUp() {
         contactVerificationService = new ContactVerificationService(userRepository, otpService, verificationRepository, applicationClock);
+        ReflectionTestUtils.setField(contactVerificationService, "verificationExpirationMs", 600000L);
         service = new PartnerRegistrationServiceImpl(applicationClock, profileRepository, documentRepository, userRepository,
                 roleRepository, passwordEncoder, contactVerificationService);
         request = new RegisterPartnerRequest();
@@ -277,22 +278,10 @@ class PartnerRegistrationServiceImplTest {
     }
 
     @Test
-    void invalidEmailOtpPreventsSmsVerificationAndAccountCreation() {
-        
-        when(otpService.verifyContactOtps("contact@example.com.vn", "654321", "0912345678", "123456"))
-                .thenThrow(new IllegalArgumentException("OTP email không hợp lệ: mã không đúng"));
-        assertThatThrownBy(() -> contactVerificationService.verifyContacts(contacts()))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageStartingWith("OTP email không hợp lệ:");
-        assertNoWrites();
-        verify(otpService, never()).verifyOtp("0912345678", "123456", OtpType.PHONE);
-        verifyNoInteractions(passwordEncoder);
-    }
-
-    @Test
     void invalidSmsOtpPreventsAccountAndApplicationCreation() {
         
-        when(otpService.verifyContactOtps("contact@example.com.vn", "654321", "0912345678", "123456"))
-                .thenThrow(new IllegalArgumentException("OTP điện thoại không hợp lệ: mã không đúng"));
+        doThrow(new IllegalArgumentException("OTP điện thoại không hợp lệ: mã không đúng"))
+                .when(otpService).verifyPhoneOtp("0912345678", "123456");
         assertThatThrownBy(() -> contactVerificationService.verifyContacts(contacts()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageStartingWith("OTP điện thoại không hợp lệ:");
         assertNoWrites();
@@ -301,29 +290,36 @@ class PartnerRegistrationServiceImplTest {
 
     private VerifyContactsRequest contacts() {
         VerifyContactsRequest contacts = new VerifyContactsRequest();
-        contacts.setEmail(request.getCorporateEmail());
         contacts.setPhoneNumber(request.getContactPhone());
-        contacts.setEmailOtp("654321");
         contacts.setPhoneOtp("123456");
         return contacts;
     }
 
     @Test
     void verifiesContactsAndIssuesBoundTokenWithoutCreatingAccount() {
-        when(otpService.verifyContactOtps(any(), any(), any(), any())).thenReturn(true);
         var response = contactVerificationService.verifyContacts(contacts());
         assertThat(response.getVerificationToken()).matches("[A-Za-z0-9_-]{43}");
         ArgumentCaptor<ContactVerification> grant = ArgumentCaptor.forClass(ContactVerification.class);
         verify(verificationRepository).saveAndFlush(grant.capture());
         assertThat(grant.getValue().getTokenHash()).hasSize(64).isNotEqualTo(response.getVerificationToken());
-        assertThat(grant.getValue().getEmail()).isEqualTo("contact@example.com.vn");
+        assertThat(grant.getValue().getEmail()).isEmpty();
         assertThat(grant.getValue().getPhoneNumber()).isEqualTo("0912345678");
-        verify(otpService).verifyContactOtps("contact@example.com.vn", "654321", "0912345678", "123456");
+        verify(otpService).verifyPhoneOtp("0912345678", "123456");
         assertNoWrites();
     }
+    @Test
+    void missingVerificationTokenPreventsAccountAndDossierCreation() {
+        when(roleRepository.findByName(RoleEnum.BUSINESS_PARTNER.name()))
+                .thenReturn(Optional.of(Role.builder().name(RoleEnum.BUSINESS_PARTNER.name()).build()));
+        request.setVerificationToken(null);
+        assertThatThrownBy(() -> service.register(request, files, files, null))
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("xác thực điện thoại");
+        assertNoWrites();
+        verifyNoInteractions(passwordEncoder, otpService);
+    }
+
     private void prepareAccountPersistence() {
-        ContactVerification grant = ContactVerification.builder()
-                .email(request.getCorporateEmail().trim().toLowerCase(Locale.ROOT)).phoneNumber("0912345678")
+        ContactVerification grant = ContactVerification.builder().phoneNumber("0912345678")
                 .expiresAt(LocalDateTime.now(applicationClock).plusMinutes(10)).build();
         when(verificationRepository.findLockedByTokenHash(any())).thenReturn(Optional.of(grant));
         when(roleRepository.findByName(RoleEnum.BUSINESS_PARTNER.name()))

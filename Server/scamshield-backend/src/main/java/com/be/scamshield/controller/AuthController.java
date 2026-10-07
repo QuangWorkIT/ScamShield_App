@@ -40,11 +40,11 @@ public class AuthController {
     private final ContactVerificationService contactVerificationService;
 
     @PostMapping("/verify-contacts")
-    @Operation(summary = "Xác thực OTP email và điện thoại trước khi đăng ký",
-            description = "Dùng chung cho khách chưa đăng nhập, đăng ký cá nhân và Partner. Trả token dùng một lần, hạn 10 phút giờ Việt Nam (UTC+07:00); chưa tạo tài khoản.")
+    @Operation(summary = "Xác thực OTP điện thoại trước khi đăng ký",
+            description = "Chỉ nhận phoneNumber và phoneOtp; trả verificationToken dùng một lần, hạn theo cấu hình .env; expiresAt là giờ Việt Nam để gửi form đăng ký cá nhân hoặc partner. Không xác thực email.")
     public ResponseEntity<BaseResponse<ContactVerificationResponse>> verifyContacts(
             @Valid @RequestBody VerifyContactsRequest request) {
-        return ResponseEntity.ok(new BaseResponse<>(true, "Email và điện thoại đã xác thực; có thể đăng ký",
+        return ResponseEntity.ok(new BaseResponse<>(true, "Điện thoại đã xác thực; có thể gửi form đăng ký",
                 contactVerificationService.verifyContacts(request)));
     }
 
@@ -122,7 +122,7 @@ public class AuthController {
     }
 
     @PostMapping("/register/personal")
-    @Operation(summary = "Đăng ký tài khoản cá nhân")
+    @Operation(summary = "Đăng ký tài khoản cá nhân", description = "Gọi /api/auth/verify-contacts để xác thực điện thoại trước; gửi form kèm verificationToken. Không cần OTP email.")
     public ResponseEntity<BaseResponse<Void>> registerPersonal(@Valid @RequestBody RegisterPersonalRequest request) {
         authService.registerPersonal(request);
         return ResponseEntity.ok(new BaseResponse<>(true, "Registration successful", null));

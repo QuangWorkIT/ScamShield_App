@@ -9,6 +9,13 @@ import com.be.scamshield.repository.OtpVerificationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.javamail.JavaMailSender;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
+import java.util.Properties;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import static org.mockito.ArgumentMatchers.any;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -28,7 +35,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
 
-@SpringBootTest
+@SpringBootTest(properties = {"app.otp.email-expiration-ms=420000", "app.otp.phone-expiration-ms=180000"})
 @ActiveProfiles("test")
 class SmsOtpReservationPersistenceTest {
     @Autowired
@@ -37,6 +44,8 @@ class SmsOtpReservationPersistenceTest {
     private OtpServiceImpl otpService;
     @MockitoBean
     private FirebasePhoneClient firebaseClient;
+    @MockitoBean
+    private JavaMailSender mailSender;
     @Autowired
     private OtpVerificationRepository otpRepository;
     @Autowired
@@ -52,6 +61,25 @@ class SmsOtpReservationPersistenceTest {
         now = Instant.parse("2026-10-06T03:00:00Z");
         when(applicationClock.getZone()).thenReturn(ZoneId.of("Asia/Ho_Chi_Minh"));
         when(applicationClock.instant()).thenReturn(now);
+    }
+
+    @Test
+    void smsExpiryUsesConfiguredDuration() {
+        OtpVerification phone = service.reserve("0912345678");
+        assertThat(phone.getExpiresAt()).isEqualTo(phone.getCreatedAt().plusSeconds(180));
+    }
+
+    @Test
+    void emailExpiryAndMailContentUseConfiguredDuration() throws Exception {
+        MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+        when(mailSender.createMimeMessage()).thenReturn(message);
+        otpService.sendEmailOtp("expiry-test@example.com");
+        OtpVerification email = otpRepository.findAll().getFirst();
+        assertThat(email.getExpiresAt()).isEqualTo(email.getCreatedAt().plusSeconds(420));
+        verify(mailSender).send(any(MimeMessage.class));
+        var output = new ByteArrayOutputStream();
+        message.writeTo(output);
+        assertThat(output.toString(StandardCharsets.UTF_8)).contains("420");
     }
 
     @Test

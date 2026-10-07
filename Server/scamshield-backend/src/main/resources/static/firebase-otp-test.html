@@ -12,8 +12,8 @@
 <body>
 <main>
   <span class="badge">SCAMSHIELD / DEV TOOL</span>
-  <h1>Xác thực liên hệ &amp; đăng ký partner</h1>
-  <p class="intro">Xác thực OTP email và SMS trước, sau đó mới mở form gửi hồ sơ.</p>
+  <h1>OTP điện thoại &amp; đăng ký partner</h1>
+  <p class="intro">Gửi SMS và xác thực OTP điện thoại trước, sau đó gửi hồ sơ kèm token xác nhận.</p>
   <div class="grid">
     <section>
       <h2>1. Kết nối Firebase</h2>
@@ -28,11 +28,8 @@
     </section>
     <section>
       <h2>2. Gửi &amp; xác thực OTP</h2>
-      <form id="email-form">
-        <label for="email">Email đăng ký (Gmail hoặc email khác)</label>
-        <input id="email" type="email" autocomplete="email" placeholder="partner@gmail.com" maxlength="254" required>
-        <button id="send-email" type="submit">Gửi OTP email</button>
-      </form>
+      <label for="email">Email đăng ký (không cần OTP email)</label>
+      <input id="email" type="email" autocomplete="email" placeholder="partner@gmail.com" maxlength="254" required>
       <form id="send-form">
         <label for="phone">Số điện thoại Việt Nam</label>
         <input id="phone" type="tel" autocomplete="tel" placeholder="0912345678 hoặc +84912345678" maxlength="30" required>
@@ -41,19 +38,17 @@
       </form>
       <hr>
       <form id="verify-form">
-        <label for="email-otp">Mã OTP email</label>
-        <input id="email-otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 chữ số trong email" required>
         <label for="otp">Mã OTP SMS</label>
         <input id="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6 chữ số" required>
-        <button id="verify" type="submit" disabled>Xác thực email &amp; điện thoại</button>
+        <button id="verify" type="submit" disabled>Xác thực điện thoại</button>
       </form>
-      <p class="hint">OTP hết hạn sau 5 phút. Xác thực thành công mở form bên dưới trong 10 phút. Sửa email hoặc số điện thoại sẽ yêu cầu xác thực lại.</p>
+      <p class="hint">Thời hạn OTP do backend cấu hình. Sau khi xác thực, thời gian còn lại của token hiển thị bên dưới. Đổi số điện thoại cần xác thực lại.</p>
     </section>
   </div>
   <div class="notice" id="domain-note">Để gửi SMS thật: bật Phone Authentication, cấu hình billing/Blaze và thêm domain HTTPS của trang vào Authorized domains. Có thể dùng số giả lập và mã cố định cấu hình trong Firebase để thử mà không gửi SMS.</div>
   <section>
     <h2>3. Hồ sơ partner</h2>
-    <p id="form-gate" class="hint">Chưa xác thực email và điện thoại. Form đang khóa.</p>
+    <p id="form-gate" class="hint">Xác thực OTP điện thoại trước khi gửi hồ sơ.</p>
     <form id="partner-form">
       <fieldset id="partner-fields" disabled style="border:0;padding:0;margin:0;min-width:0">
         <div class="grid">
