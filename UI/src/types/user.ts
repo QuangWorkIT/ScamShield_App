@@ -1,4 +1,4 @@
-const role = ["admin", "user", "moderator", "guest"] as const
+const role = ["ADMINISTRATOR", "REGISTERED_USER", "MODERATOR", "GUEST", "BUSINESS_PARTNER"] as const
 
 export type UserRole = (typeof role)[number]
 

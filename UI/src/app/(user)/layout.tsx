@@ -1,3 +1,4 @@
+import { RoleGuard } from "@/components/shared/role-guard"
 import { UserDashboardShell } from "@/components/layout/user/user-dashboard-shell"
 
 export default function UserLayout({
@@ -5,5 +6,9 @@ export default function UserLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return <UserDashboardShell>{children}</UserDashboardShell>
+  return (
+    <RoleGuard allowedRoles={["REGISTERED_USER"]}>
+      <UserDashboardShell>{children}</UserDashboardShell>
+    </RoleGuard>
+  )
 }
