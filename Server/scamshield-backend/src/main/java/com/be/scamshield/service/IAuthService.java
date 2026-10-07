@@ -1,6 +1,9 @@
 package com.be.scamshield.service;
 
-import com.be.scamshield.dto.*;
+import com.be.scamshield.dto.AuthResponse;
+import com.be.scamshield.dto.ChangePasswordRequest;
+import com.be.scamshield.dto.LoginRequest;
+import com.be.scamshield.dto.UserDto;
 import com.be.scamshield.dto.request.RegisterGoogleRequest;
 import com.be.scamshield.dto.request.RegisterPersonalRequest;
 import jakarta.servlet.http.HttpServletResponse;

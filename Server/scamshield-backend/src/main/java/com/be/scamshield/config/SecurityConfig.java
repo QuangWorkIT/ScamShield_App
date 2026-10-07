@@ -6,6 +6,10 @@ import com.be.scamshield.security.JwtAuthenticationEntryPoint;
 import com.be.scamshield.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -68,7 +72,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, Environment environment) throws Exception {
+        boolean testUiEnabled = environment.acceptsProfiles(Profiles.of("dev", "test"));
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
@@ -80,6 +85,9 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/firebase-otp-test.html", "/firebase-otp-test.js")
+                            .access((authentication, context) -> new AuthorizationDecision(testUiEnabled))
+                        .requestMatchers(HttpMethod.POST, "/api/partners/registrations").permitAll()
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/v3/api-docs/**",

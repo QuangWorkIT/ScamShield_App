@@ -60,3 +60,10 @@ Follow these rules unconditionally whenever generating code for this workspace.
 
 - ALWAYS import classes and annotations properly at the top of the file using standard `import` statements (e.g. `import io.swagger.v3.oas.annotations.Operation;`).
 - NEVER use fully qualified class names inline within the code (e.g. avoid `@io.swagger.v3.oas.annotations.Operation(...)`) unless there is an unavoidable naming collision.
+
+## 11. Mock data SQL
+
+- script/mock_data_vi.sql is exclusively for inserting mock data into existing tables.
+- Only INSERT statements and explanatory comments are allowed in this file (SELECT subqueries inside INSERT are allowed).
+- NEVER add schema migrations, CREATE, ALTER, DROP, TRUNCATE, DELETE, UPDATE, or procedural/transaction blocks to this file.
+- Keep schema migrations separate from mock data; do not create migration files unless requested by the user.

@@ -103,7 +103,7 @@ class AuthServiceTest {
     void changePassword_Success() {
         ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword456!");
 
-        when(userRepository.findByEmail("testuser@example.com")).thenReturn(Optional.of(sampleUser));
+        when(userRepository.findByEmailOrPhoneNumber("testuser@example.com")).thenReturn(Optional.of(sampleUser));
         when(passwordEncoder.matches("OldPassword123!", "encodedOldPassword")).thenReturn(true);
         when(passwordEncoder.encode("NewPassword456!")).thenReturn("encodedNewPassword");
 
@@ -118,7 +118,7 @@ class AuthServiceTest {
     void changePassword_WrongOldPassword_ThrowsException() {
         ChangePasswordRequest request = new ChangePasswordRequest("WrongPassword", "NewPassword456!");
 
-        when(userRepository.findByEmail("testuser@example.com")).thenReturn(Optional.of(sampleUser));
+        when(userRepository.findByEmailOrPhoneNumber("testuser@example.com")).thenReturn(Optional.of(sampleUser));
         when(passwordEncoder.matches("WrongPassword", "encodedOldPassword")).thenReturn(false);
 
         assertThrows(BadRequestException.class, () -> authService.changePassword("testuser@example.com", request));

@@ -1,14 +1,5 @@
--- Dữ liệu mẫu (Mock Data) tiếng Việt đầy đủ cho 34 Bảng của hệ thống ScamShield
-
--- 1. Xóa sạch dữ liệu cũ (Xóa cẩn thận theo thứ tự để không dính Foreign Key)
-TRUNCATE TABLE 
-    audit_logs, official_scam_warnings, education_articles, 
-    warning_cards, partner_official_alerts, notifications, user_alert_subscriptions, abuse_flags, 
-    dispute_evidence, disputes, moderation_actions, report_evidence, reports, rule_definitions, 
-    extracted_iocs, check_requests, whitelist_entries, partner_profiles, confirmed_indicators, 
-    indicators, rate_limit_policies, quota_usage, quota_policies, guest_sessions, monthly_rewards, 
-    reputation_transactions, refresh_tokens, users, scam_categories, reputation_ranks, roles 
-CASCADE;
+-- Dữ liệu mẫu tiếng Việt. Chỉ chứa INSERT; schema phải được tạo sẵn trước khi chạy.
+-- Không migration bảng hoặc xóa/cập nhật dữ liệu trong file này.
 
 -- 1. roles
 INSERT INTO roles (name, description) VALUES
