@@ -1,12 +1,15 @@
 package com.be.scamshield.entity;
 
+import com.be.scamshield.constant.OtpType;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "otp_verifications")
+@Table(name = "otp_verifications", indexes = {
+        @Index(name = "idx_otp_type_created_at", columnList = "type,created_at")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -20,11 +23,20 @@ public class OtpVerification {
     @Column(name = "target", nullable = false)
     private String target; // This could be email or phone number
 
-    @Column(name = "otp_code", nullable = false)
+    @Column(name = "otp_code")
+    @ToString.Exclude
     private String otpCode;
 
+    @Column(name = "provider", length = 20)
+    private String provider;
+
+    @Column(name = "provider_session_info", columnDefinition = "text")
+    @ToString.Exclude
+    private String providerSessionInfo;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false)
-    private String type; // EMAIL or PHONE
+    private OtpType type;
 
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;

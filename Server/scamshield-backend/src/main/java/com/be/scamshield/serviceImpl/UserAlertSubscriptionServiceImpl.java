@@ -8,11 +8,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
 
 @Service
 @RequiredArgsConstructor
 public class UserAlertSubscriptionServiceImpl implements IUserAlertSubscriptionService {
 
+    private final Clock applicationClock;
     private final UserAlertSubscriptionRepository subscriptionRepository;
 
     @Override
@@ -24,7 +26,7 @@ public class UserAlertSubscriptionServiceImpl implements IUserAlertSubscriptionS
                 .user(user)
                 .category(null) // null = ALL categories / general
                 .regionCode("VN") // Mặc định Việt Nam
-                .subscribedAt(LocalDateTime.now())
+                .subscribedAt(LocalDateTime.now(applicationClock))
                 .build();
                 
         subscriptionRepository.save(subscription);

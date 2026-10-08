@@ -5,6 +5,7 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import jakarta.annotation.PostConstruct;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,13 @@ public class JwtTokenProvider {
 
     @Value("${app.jwt.refresh-expiration-ms}")
     private long refreshExpirationInMs;
+
+    @PostConstruct
+    void validateExpiration() {
+        if (jwtExpirationInMs <= 0 || refreshExpirationInMs <= 0) {
+            throw new IllegalArgumentException("Thời gian hết hạn JWT và refresh token phải lớn hơn 0 ms");
+        }
+    }
 
     private SecretKey getSigningKey() {
         byte[] keyBytes;
