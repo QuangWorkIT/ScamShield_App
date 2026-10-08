@@ -7,6 +7,7 @@ type AuthState = {
   setToken: (token: string | null) => void
   setUser: (user: User | null) => void
   clearUser: () => void
+  logout: () => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -15,4 +16,5 @@ export const useAuthStore = create<AuthState>((set) => ({
   setToken: (token) => set({ token }),
   setUser: (user) => set({ user }),
   clearUser: () => set({ user: null, token: null }),
+  logout: () => set({ user: null, token: null }),
 }))

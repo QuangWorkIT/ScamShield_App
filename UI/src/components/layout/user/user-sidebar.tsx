@@ -24,6 +24,8 @@ import {
 } from "@/config/navigation/user-nav"
 import { useAuthStore } from "@/store/auth.store"
 import { cn } from "@/lib/utils"
+import { authServices } from "@/features/auth/services/auth-services"
+import { toast } from "react-toastify"
 
 interface UserSidebarProps {
   className?: string
@@ -34,11 +36,21 @@ export function UserSidebar({ className, onCloseMobile }: UserSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, setTheme } = useTheme()
-  const setUser = useAuthStore((state) => state.setUser)
+  const logout = useAuthStore((state) => state.logout)
 
-  const handleLogout = () => {
-    setUser(null)
-    router.push("/login")
+  const handleLogout = async () => {
+    try {
+      await authServices.logout()
+      logout()
+      toast.success("Đăng xuất thành công")
+      router.push("/login")
+    } catch (error) {
+      if(error instanceof Error) {
+        toast.error(error.message)
+      } else {
+        toast.error("Đã có lỗi xảy ra, vui lòng thử lại")
+      }
+    }
   }
 
   // Only the most specific matching nav item is highlighted

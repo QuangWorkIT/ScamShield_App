@@ -12,6 +12,23 @@ export function ForbiddenContent() {
   const clearUser = useAuthStore((state) => state.clearUser)
 
 
+  const getDashboardHref = (role?: string) => {
+    switch (role) {
+      case "ADMINISTRATOR":
+        return "/admin"
+      case "REGISTERED_USER":
+        return "/user"
+      case "MODERATOR":
+        return "/moderator"
+      case "GUEST":
+        return "/guest"
+      case "BUSINESS_PARTNER":
+        return "/business-partner"
+      default:
+        return "/"
+    }
+  }
+
   const handleLogout = () => {
     clearUser()
     router.push("/login")
@@ -33,21 +50,14 @@ export function ForbiddenContent() {
         </h1>
 
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Trang này bị giới hạn quyền truy cập. Vai trò tài khoản hiện tại của bạn{" "}
-          {user?.role ? (
-            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold text-foreground">
-              {user.role}
-            </span>
-          ) : (
-            "chưa đăng nhập"
-          )}{" "}
+          Trang này bị giới hạn quyền truy cập. Vai trò tài khoản hiện tại của bạn
           không được phép truy cập vào khu vực này.
         </p>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           {user ? (
             <Button
-              onClick={() => router.push(user.role)}
+              onClick={() => router.push(getDashboardHref(user.role))}
               className="h-11 gap-2 rounded-xl bg-[#0B132B] text-white hover:bg-[#111A36] dark:bg-primary dark:text-primary-foreground"
             >
               <ArrowLeft size={16} weight="bold" />
@@ -62,15 +72,6 @@ export function ForbiddenContent() {
               <span>Đăng nhập</span>
             </Button>
           )}
-
-          <Button
-            variant="outline"
-            onClick={() => router.push("/")}
-            className="h-11 gap-2 rounded-xl"
-          >
-            <House size={16} weight="bold" />
-            <span>Trang chủ</span>
-          </Button>
 
           {user && (
             <Button

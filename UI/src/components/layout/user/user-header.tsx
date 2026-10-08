@@ -30,7 +30,7 @@ export function UserHeader({ onToggleMobileMenu }: UserHeaderProps) {
         </button>
 
         {/* Breadcrumb path */}
-        <div className="flex items-center gap-2 text-xs font-semibold">
+        <div className="flex items-center gap-2 text-xs font-semibold p-10">
           <Link
             href="/user"
             className="flex items-center gap-1.5 text-[#45464D] hover:text-[#131B2E] dark:text-muted-foreground dark:hover:text-foreground"

@@ -88,8 +88,17 @@ public class SecurityConfig {
                         .requestMatchers("/firebase-otp-test.html", "/firebase-otp-test.js")
                             .access((authentication, context) -> new AuthorizationDecision(testUiEnabled))
                         .requestMatchers(HttpMethod.POST, "/api/partners/registrations").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/verify-contacts",
+                                "/api/auth/login",
+                                "/api/auth/refresh-token",
+                                "/api/auth/logout",
+                                "/api/auth/send-email-otp",
+                                "/api/auth/send-phone-otp",
+                                "/api/auth/register/personal",
+                                "/api/auth/register/google"
+                        ).permitAll()
                         .requestMatchers(
-                                "/api/auth/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",

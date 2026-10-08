@@ -1,11 +1,14 @@
 package com.be.scamshield.security;
 
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -23,6 +26,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
+    private final JwtAuthenticationEntryPoint unauthorizedHandler;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -31,7 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String jwt = getJwtFromRequest(request);
 
-            if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
+            if (StringUtils.hasText(jwt)) {
                 String username = tokenProvider.getUsernameFromJWT(jwt);
 
                 UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
@@ -42,11 +46,38 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
+
+        } catch (ExpiredJwtException ex) {
+            log.error("Expired JWT token", ex);
+            handleAuthenticationFailure(request, response, "Token expired", ex);
+            return;
+        } catch (JwtException | IllegalArgumentException ex) {
+            log.error("Invalid JWT token", ex);
+            handleAuthenticationFailure(request, response, "Invalid token", ex);
+            return;
+        } catch (BadCredentialsException ex) {
+            log.error("Could not set user authentication in security context", ex);
+            handleAuthenticationFailure(request, response, ex.getMessage(), ex);
+            return;
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);
+            handleAuthenticationFailure(request, response, "Invalid token", ex);
+            return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void handleAuthenticationFailure(HttpServletRequest request,
+                                             HttpServletResponse response,
+                                             String message,
+                                             Exception ex) throws IOException, ServletException {
+        SecurityContextHolder.clearContext();
+        unauthorizedHandler.commence(
+                request,
+                response,
+                new BadCredentialsException(message, ex)
+        );
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

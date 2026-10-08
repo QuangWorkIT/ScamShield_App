@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuthStore } from "@/store/auth.store"
-import { decodeJwt } from "@/lib/utils/jwtUtil"
+import { useRefreshToken } from "@/hooks/use-refresh-token"
 import { UserRole } from "@/types/user"
 
 interface RoleGuardProps {
@@ -13,11 +12,13 @@ interface RoleGuardProps {
 
 export function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
   const router = useRouter()
-  const token = useAuthStore((state) => state.token)
-  const user = useAuthStore((state) => state.user)
+  const { isLoading, token, role } = useRefreshToken()
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false)
 
   useEffect(() => {
+    // Wait for the initial refresh token attempt before verifying authorization
+    if (isLoading) return
+
     // 1. If not logged in, redirect to login page
     if (!token) {
       setIsAuthorized(false)
@@ -25,26 +26,23 @@ export function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
       return
     }
 
-    // 2. Resolve user role from auth store or decoded JWT
-    let currentRole: UserRole | null = (user?.role as UserRole) || null
-    if (!currentRole && token) {
-      const decoded = decodeJwt(token)
-      currentRole = (decoded?.role as UserRole) || null
-    }
-
-    // 3. If role is not allowed, redirect to fobidden page
-    if (!currentRole || !allowedRoles.includes(currentRole)) {
+    // 2. If role is not allowed, redirect to forbidden page
+    if (!role || !allowedRoles.includes(role)) {
       setIsAuthorized(false)
-      router.replace("/fobidden")
+      router.replace("/forbidden")
       return
     }
 
-    // 4. Role matches allowed list
+    // 3. Role matches allowed list
     setIsAuthorized(true)
-  }, [token, user, allowedRoles, router])
+  }, [isLoading, token, role, allowedRoles, router])
 
-  if (!isAuthorized) {
-    return null
+  if (isLoading || !isAuthorized) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center">
+        <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
   }
 
   return <>{children}</>

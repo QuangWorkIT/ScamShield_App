@@ -2,6 +2,7 @@ import { Geist, Geist_Mono, Roboto_Slab, Source_Sans_3 } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/providers/theme-provider"
+import { AuthProvider } from "@/providers/auth-provider"
 import { cn } from "@/lib/utils"
 import { ToastContainer } from "@/components/shared/toast-container"
 import "react-toastify/dist/ReactToastify.css"
@@ -41,10 +42,12 @@ export default function RootLayout({
         sourceSans3Heading.variable
       )}
     >
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider>
-          {children}
-          <ToastContainer />
+          <AuthProvider>
+            {children}
+            <ToastContainer />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
