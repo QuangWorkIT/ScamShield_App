@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, Roboto_Slab, Source_Sans_3 } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/providers/theme-provider"
 import { cn } from "@/lib/utils"
+import { ToastContainer } from "@/components/shared/toast-container"
+import "react-toastify/dist/ReactToastify.css"
 
 const sourceSans3Heading = Source_Sans_3({
   subsets: ["latin"],
@@ -42,6 +44,7 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           {children}
+          <ToastContainer />
         </ThemeProvider>
       </body>
     </html>

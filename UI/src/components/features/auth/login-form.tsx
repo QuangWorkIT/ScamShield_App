@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/store/auth.store"
 import { authServices } from "@/features/auth/services/auth-services"
+import { toast } from "react-toastify"
 
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -165,6 +166,7 @@ export function LoginForm() {
           router.push("/")
           break
       }
+      toast.success("Đăng nhập thành công")
     } catch (err: unknown) {
       let message = "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin."
       if (axios.isAxiosError(err)) {
