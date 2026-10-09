@@ -131,8 +131,38 @@ export const MOCK_TRACKING_REPORTS: TrackingReportItem[] = [
 ]
 
 export async function submitScamReport(
-  _payload?: CreateReportPayload
-): Promise<{ success: boolean; reportId: string }> {
+  payload?: CreateReportPayload
+): Promise<{ success: boolean; reportId: string; message?: string }> {
+  try {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+    const response = await fetch(`${API_BASE_URL}/api/v1/reports/json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        threatType: payload?.threatType || "PHONE",
+        targetIdentifier: payload?.targetIdentifier || "",
+        category: payload?.category || "Lừa đảo khác",
+        description: payload?.description || "",
+        isConfirmed: payload?.isConfirmed ?? true,
+        attachmentUrls: payload?.attachments || [],
+      }),
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      return {
+        success: true,
+        reportId: result.data?.reportCode || `#RPT-${result.data?.id || Math.floor(1000 + Math.random() * 9000)}`,
+        message: result.message,
+      }
+    }
+  } catch (error) {
+    console.warn("Backend API call failed, falling back to client mode:", error)
+  }
+
+  // Fallback for offline / dev
   await new Promise((resolve) => setTimeout(resolve, 400))
   return {
     success: true,

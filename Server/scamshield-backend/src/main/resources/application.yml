@@ -53,6 +53,13 @@ firebase:
 
 # Application Configurations
 app:
+  aws:
+    s3:
+      region: ${AWS_REGION:ap-southeast-1}
+      access-key-id: ${AWS_ACCESS_KEY_ID:}
+      secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
+      bucket-name: ${AWS_S3_BUCKET_NAME:scamshield-evidence-bucket}
+      endpoint-override: ${AWS_S3_ENDPOINT_OVERRIDE:}
   otp:
     email-expiration-ms: ${EMAIL_OTP_EXPIRATION_MS:300000}
     phone-expiration-ms: ${PHONE_OTP_EXPIRATION_MS:300000}
