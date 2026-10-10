@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
 import {
   ShieldCheck,
@@ -22,7 +22,7 @@ import {
   UserNavItem,
   getActiveUserNavItem,
 } from "@/config/navigation/user-nav"
-import { useAuthStore } from "@/store/auth.store"
+import { useLogout } from "@/hooks/use-logout"
 import { cn } from "@/lib/utils"
 
 interface UserSidebarProps {
@@ -32,14 +32,8 @@ interface UserSidebarProps {
 
 export function UserSidebar({ className, onCloseMobile }: UserSidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
   const { theme, setTheme } = useTheme()
-  const setUser = useAuthStore((state) => state.setUser)
-
-  const handleLogout = () => {
-    setUser(null)
-    router.push("/login")
-  }
+  const handleLogout = useLogout()
 
   // Only the most specific matching nav item is highlighted
   const activeHref = getActiveUserNavItem(pathname)?.href

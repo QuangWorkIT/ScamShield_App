@@ -71,7 +71,7 @@ function HeroSection() {
       {/* Badge */}
       <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50/80 border border-blue-100 text-blue-700 text-sm font-medium mb-8">
         <Sparkle weight="fill" className="text-blue-600" />
-        Hệ thống phân tích mới do trí tuệ nhân tạo Quốc gia
+        Hệ thống phân tích mới bằng trí tuệ nhân tạo
       </div>
 
       {/* Heading */}

@@ -68,12 +68,35 @@ Route groups `(role)` contain a real `role/` segment, so URLs are `/guest/...`,
 `/user/...`, `/moderator/...`, `/admin/...`. Most `page.tsx` files are
 placeholders (`<div>This is ... page</div>`) awaiting implementation.
 
-## Roles & Auth (current state: mocked)
+## Roles & Auth
 
-- `UserRole = "admin" | "user" | "moderator" | "guest"` (`src/types/user.ts`).
-- `useAuthStore` holds `user | null`; no real backend auth yet.
-- `RoleSwitcher` (dev-only, rendered in root layout) sets a mock user and
-  navigates to `ROLE_HOME[role]`.
+- `UserRole = "ADMINISTRATOR" | "REGISTERED_USER" | "MODERATOR" | "GUEST" | "BUSINESS_PARTNER"` (`src/types/user.ts`).
+- `useAuthStore` (`src/store/auth.store.ts`) holds in-memory `token: string | null` and `user: User | null`.
+- **Route Guarding:** Protected route groups (`/admin`, `/user`, `/moderator`) wrap layouts with `<RoleGuard allowedRoles={[...]} />` (`src/components/shared/role-guard.tsx`). Unauthorized roles redirect to `/fobidden`; unauthenticated visitors redirect to `/login`.
+
+## API Integration & Layer Separation
+
+All HTTP communications use centralized Axios instances defined in `src/lib/api/instance.ts`:
+
+### 1. Axios Instances
+- **`publicApi`**: For public endpoints that do not require an authorization header (e.g., login, registration, public threat lookup).
+- **`authorizeApi`**: For secured endpoints. Contains an Axios request interceptor that automatically reads the JWT token from `useAuthStore.getState().token` and injects `Authorization: Bearer <token>`.
+
+### 2. Separated Architectural Layers
+Always maintain strict separation between network operations and presentation:
+
+- **Service Layer (`src/features/<domain>/services/`)**:
+  - All direct API calls (`publicApi`, `authorizeApi`) MUST be encapsulated inside feature services (e.g. `auth-services.ts`, `check.service.ts`).
+  - Services handle parameter mapping, response data unpacking, store updates (such as `setToken`), and error transformation.
+  - Components and pages should NEVER invoke `axios`, `publicApi`, or `authorizeApi` directly.
+
+- **Component Layer (`src/components/features/<domain>/`)**:
+  - Feature components invoke service methods to perform actions.
+  - Manage user interaction, form validation, loading states, and error alerts.
+
+- **Page Layer (`src/app/**/page.tsx`)**:
+  - Pages act as thin composition roots.
+  - Pages only assemble components and render data/responses. Do not perform direct API calls or heavy business logic directly in `page.tsx`.
 
 ## Navigation Pattern
 
