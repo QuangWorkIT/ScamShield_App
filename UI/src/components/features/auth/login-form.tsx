@@ -18,10 +18,8 @@ import {
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { useAuthStore } from "@/store/auth.store"
 import { authServices } from "@/features/auth/services/auth-services"
 import { toast } from "react-toastify"
-
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -95,8 +93,6 @@ function validatePassword(value: string): string | null {
 
 export function LoginForm() {
   const router = useRouter()
-  const setToken = useAuthStore((state) => state.setToken)
-  const setUser = useAuthStore((state) => state.setUser)
 
   const [showPassword, setShowPassword] = useState(false)
   const [identifier, setIdentifier] = useState("")
@@ -128,7 +124,7 @@ export function LoginForm() {
     }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     setTouched({ identifier: true, password: true })
     const identifierError = validateIdentifier(identifier)
@@ -143,23 +139,26 @@ export function LoginForm() {
     setServerError(null)
 
     try {
-      const response = await authServices.loginByForm(identifier.trim(), password)
+      const response = await authServices.loginByForm(
+        identifier.trim(),
+        password
+      )
       const role = response.role
 
       switch (role) {
-        case 'ADMINISTRATOR':
+        case "ADMINISTRATOR":
           router.push("/admin")
           break
-        case 'REGISTERED_USER':
+        case "REGISTERED_USER":
           router.push("/user")
           break
-        case 'MODERATOR':
+        case "MODERATOR":
           router.push("/moderator")
           break
-        case 'GUEST':
+        case "GUEST":
           router.push("/guest")
           break
-        case 'BUSINESS_PARTNER':
+        case "BUSINESS_PARTNER":
           router.push("/business-partner")
           break
         default:
@@ -168,11 +167,15 @@ export function LoginForm() {
       }
       toast.success("Đăng nhập thành công")
     } catch (err: unknown) {
-      let message = "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin."
       if (axios.isAxiosError(err)) {
-        message = err.response?.data?.message || err.response?.data?.error || message
+        setServerError(
+          err.response?.data?.message || err.response?.data?.error || "Đã có lỗi xảy ra"
+        )
+      } else if (err instanceof Error) {
+        setServerError(err.message)
+      } else {
+        setServerError("Đã có lỗi xảy ra")
       }
-      setServerError(message)
     } finally {
       setIsLoading(false)
     }
@@ -202,14 +205,14 @@ export function LoginForm() {
           >
             {/* Ambient Glow Rings */}
             <div
-              className="pointer-events-none absolute -left-24 -top-24 size-80 rounded-full opacity-100"
+              className="pointer-events-none absolute -top-24 -left-24 size-80 rounded-full opacity-100"
               style={{
                 background: "rgba(208, 217, 253, 0.1)",
                 filter: "blur(32px)",
               }}
             />
             <div
-              className="pointer-events-none absolute bottom-[-20px] right-[-40px] size-80 rounded-full opacity-100"
+              className="pointer-events-none absolute right-[-40px] bottom-[-20px] size-80 rounded-full opacity-100"
               style={{
                 background: "rgba(14, 165, 233, 0.15)",
                 filter: "blur(32px)",
@@ -221,22 +224,18 @@ export function LoginForm() {
               {/* Brand */}
               <div className="flex items-center gap-3">
                 <div className="flex size-12 items-center justify-center rounded-2xl bg-white/10 shadow-inner backdrop-blur-md">
-                  <ShieldCheck
-                    size={24}
-                    weight="fill"
-                    className="text-white"
-                  />
+                  <ShieldCheck size={24} weight="fill" className="text-white" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-heading text-xl font-bold tracking-tight text-white">
                       ScamShield
                     </span>
-                    <span className="rounded bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
+                    <span className="rounded bg-white/20 px-2 py-0.5 text-[10px] font-bold tracking-widest text-white uppercase">
                       VN
                     </span>
                   </div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
                     AI Threat Verification • Vietnam
                   </p>
                 </div>
@@ -244,14 +243,13 @@ export function LoginForm() {
 
               {/* Hero Text */}
               <div className="flex flex-col gap-3 pt-2">
-                <h2 className="font-heading text-3xl font-extrabold leading-tight tracking-tight text-white lg:text-4xl">
+                <h2 className="font-heading text-3xl leading-tight font-extrabold tracking-tight text-white lg:text-4xl">
                   Cổng Giám Sát
                   <br />
                   An Toàn Số
                 </h2>
                 <p className="text-base leading-relaxed text-slate-400">
-                  Hệ thống bảo vệ chủ động, ngăn chặn lừa đảo
-                  trực tuyến.
+                  Hệ thống bảo vệ chủ động, ngăn chặn lừa đảo trực tuyến.
                 </p>
               </div>
 
@@ -301,23 +299,24 @@ export function LoginForm() {
           <div className="flex flex-col justify-between px-6 py-10 sm:px-10 lg:col-span-7 lg:px-14 lg:py-14">
             <div className="mx-auto w-full max-w-lg">
               {/* Form Header */}
-              <div className="pb-8 pt-2">
+              <div className="pt-2 pb-8">
                 <h1 className="font-heading text-4xl font-bold tracking-tight text-[#131B2E] dark:text-foreground">
                   Đăng Nhập
                 </h1>
               </div>
 
               {/* Form Fields */}
-              <form
-                onSubmit={handleSubmit}
-                className="flex flex-col gap-5"
-              >
+              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
                 {serverError && (
                   <div
                     role="alert"
                     className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-[#BA1A1A] dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400"
                   >
-                    <WarningCircle size={18} weight="fill" className="shrink-0" />
+                    <WarningCircle
+                      size={18}
+                      weight="fill"
+                      className="shrink-0"
+                    />
                     <span>{serverError}</span>
                   </div>
                 )}
@@ -331,7 +330,7 @@ export function LoginForm() {
                     Số điện thoại hoặc Email
                   </label>
                   <div className="relative">
-                    <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#76767E]">
+                    <div className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-[#76767E]">
                       <EnvelopeSimple size={16} weight="regular" />
                     </div>
                     <input
@@ -355,10 +354,10 @@ export function LoginForm() {
                         errors.identifier ? "identifier-error" : undefined
                       }
                       className={cn(
-                        "h-14 w-full rounded-xl bg-[#FAF8FF] pl-12 pr-4 text-base",
+                        "h-14 w-full rounded-xl bg-[#FAF8FF] pr-4 pl-12 text-base",
                         "text-[#131B2E] placeholder:text-[#76767E]/70",
                         "shadow-[inset_0_2px_4px_0_rgba(0,0,0,0.05)]",
-                        "outline-none transition-all",
+                        "transition-all outline-none",
                         "dark:bg-muted dark:text-foreground dark:placeholder:text-muted-foreground",
                         errors.identifier
                           ? "border border-[#BA1A1A] ring-2 ring-[#BA1A1A]/20 dark:border-destructive dark:ring-destructive/30"
@@ -391,7 +390,7 @@ export function LoginForm() {
                     Mật khẩu bảo mật
                   </label>
                   <div className="relative">
-                    <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#76767E]">
+                    <div className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-[#76767E]">
                       <Lock size={16} weight="regular" />
                     </div>
                     <input
@@ -418,7 +417,7 @@ export function LoginForm() {
                         "h-14 w-full rounded-xl bg-[#FAF8FF] px-12 text-base",
                         "text-[#131B2E] placeholder:text-[#76767E]/70",
                         "shadow-[inset_0_2px_4px_0_rgba(0,0,0,0.05)]",
-                        "outline-none transition-all",
+                        "transition-all outline-none",
                         "dark:bg-muted dark:text-foreground dark:placeholder:text-muted-foreground",
                         errors.password
                           ? "border border-[#BA1A1A] ring-2 ring-[#BA1A1A]/20 dark:border-destructive dark:ring-destructive/30"
@@ -430,11 +429,9 @@ export function LoginForm() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#76767E] hover:bg-transparent hover:text-[#131B2E] dark:hover:bg-transparent dark:hover:text-foreground"
+                      className="absolute top-1/2 right-3 -translate-y-1/2 text-[#76767E] hover:bg-transparent hover:text-[#131B2E] dark:hover:bg-transparent dark:hover:text-foreground"
                       aria-label={
-                        showPassword
-                          ? "Ẩn mật khẩu"
-                          : "Hiện mật khẩu"
+                        showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
                       }
                     >
                       {showPassword ? (
@@ -476,7 +473,7 @@ export function LoginForm() {
                   </label>
                   <Link
                     href="/forgot-password"
-                    className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#545D7C] transition-colors hover:text-[#131B2E] dark:text-muted-foreground dark:hover:text-foreground"
+                    className="shrink-0 text-[11px] font-semibold tracking-wider text-[#545D7C] uppercase transition-colors hover:text-[#131B2E] dark:text-muted-foreground dark:hover:text-foreground"
                   >
                     Quên mật khẩu?
                   </Link>
@@ -518,7 +515,7 @@ export function LoginForm() {
                 {/* Divider */}
                 <div className="relative flex items-center justify-center py-2">
                   <div className="absolute inset-x-0 top-1/2 h-px bg-[#E2E7FF] dark:bg-border" />
-                  <span className="relative bg-white px-4 text-[11px] font-bold uppercase tracking-widest text-[#45464D] dark:bg-card dark:text-muted-foreground">
+                  <span className="relative bg-white px-4 text-[11px] font-bold tracking-widest text-[#45464D] uppercase dark:bg-card dark:text-muted-foreground">
                     Hoặc tiếp tục với
                   </span>
                 </div>

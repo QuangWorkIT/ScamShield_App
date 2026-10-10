@@ -6,24 +6,15 @@ import { toast } from "react-toastify"
 import { usePathname } from "next/navigation"
 import { useAuthStore } from "@/store/auth.store"
 import { decodeJwt } from "@/lib/utils/jwtUtil"
-import { User, UserRole } from "@/types/user"
+import { UserRole } from "@/types/user"
+import { authServices, RefreshTokenResult } from "@/features/auth/services/auth-services"
 
-const BE_URL = process.env.NEXT_PUBLIC_BE_URL
-
-export interface RefreshTokenResult {
-  accessToken: string
-  user: User | null
-  role: UserRole | null
-}
-
-let activeRefreshPromise: Promise<RefreshTokenResult | null> | null = null
+export type { RefreshTokenResult }
 
 export function useRefreshToken() {
   const pathname = usePathname()
   const token = useAuthStore((state) => state.token)
   const user = useAuthStore((state) => state.user)
-  const setToken = useAuthStore((state) => state.setToken)
-  const setUser = useAuthStore((state) => state.setUser)
   const logout = useAuthStore((state) => state.logout)
 
   const [isLoading, setIsLoading] = useState<boolean>(!token)
@@ -32,86 +23,43 @@ export function useRefreshToken() {
   const initializedRef = useRef(false)
 
   const refresh = useCallback(async (): Promise<RefreshTokenResult | null> => {
-    if (activeRefreshPromise) {
-      return activeRefreshPromise
-    }
-
     setIsLoading(true)
     setError(null)
 
-    activeRefreshPromise = (async () => {
-      try {
-        const refreshUrl = `${BE_URL}/auth/refresh-token`
-        const response = await axios.post(
-          refreshUrl,
-          {},
-          { withCredentials: true }
-        )
+    try {
+      return await authServices.refreshToken()
+    } catch (err: unknown) {
+      logout()
+      let errMsg = "Failed to refresh token"
+      let isCookieMissing = false
 
-        const accessToken =
-          response.data?.data?.accessToken || response.data?.accessToken
-
-        if (!accessToken) {
-          throw new Error("No access token returned from refresh API")
+      if (axios.isAxiosError(err)) {
+        errMsg = err.response?.data?.message || errMsg
+        if (errMsg.toLowerCase().includes("cookie is missing")) {
+          isCookieMissing = true
         }
-
-        setToken(accessToken)
-
-        let currentUser: User | null = null
-        let currentRole: UserRole | null = null
-
-        const decoded = decodeJwt(accessToken)
-        if (decoded?.id && decoded?.email && decoded?.role) {
-          currentUser = {
-            userId: String(decoded.id),
-            email: decoded.email,
-            role: decoded.role as UserRole,
-          }
-          currentRole = decoded.role as UserRole
-          setUser(currentUser)
-        } else if (decoded?.role) {
-          currentRole = decoded.role as UserRole
-        }
-
-        return {
-          accessToken,
-          user: currentUser,
-          role: currentRole,
-        }
-      } catch (err: unknown) {
-        logout()
-        let errMsg = "Failed to refresh token"
-        let isCookieMissing = false
-
-        if (axios.isAxiosError(err)) {
-          errMsg = err.response?.data?.message || errMsg
-          if (errMsg.toLowerCase().includes("cookie is missing")) {
-            isCookieMissing = true
-          }
-        }
-
-        setError(errMsg)
-
-        // Only show session expired toast if the session actually expired,
-        // and avoid showing it on auth pages (login/register) or when no cookie was ever present.
-        const isAuthPage = pathname?.startsWith("/login") || pathname?.startsWith("/register")
-        if (!isCookieMissing && !isAuthPage) {
-          toast.error("Phiên đã kết thúc, vui lòng đăng nhập lại", {
-            toastId: "session-expired",
-            position: "top-right",
-          })
-        }
-
-        return null
-      } finally {
-        activeRefreshPromise = null
-        setIsLoading(false)
-        setIsInitialized(true)
+      } else if (err instanceof Error) {
+        errMsg = err.message
       }
-    })()
 
-    return activeRefreshPromise
-  }, [setToken, setUser, logout, pathname])
+      setError(errMsg)
+
+      // Only show session expired toast if the session actually expired,
+      // and avoid showing it on auth pages (login/register) or when no cookie was ever present.
+      const isAuthPage = pathname?.startsWith("/login") || pathname?.startsWith("/register")
+      if (!isCookieMissing && !isAuthPage) {
+        toast.error("Phiên đã kết thúc, vui lòng đăng nhập lại", {
+          toastId: "session-expired",
+          position: "top-right",
+        })
+      }
+
+      return null
+    } finally {
+      setIsLoading(false)
+      setIsInitialized(true)
+    }
+  }, [logout, pathname])
 
   useEffect(() => {
     // Only attempt initial refresh once per page lifecycle

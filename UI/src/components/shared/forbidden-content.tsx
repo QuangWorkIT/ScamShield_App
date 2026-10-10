@@ -1,16 +1,15 @@
 "use client"
 
-import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ShieldWarning, ArrowLeft, SignOut, House } from "@phosphor-icons/react"
+import { ShieldWarning, ArrowLeft, SignOut } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { useLogout } from "@/hooks/use-logout"
 import { useAuthStore } from "@/store/auth.store"
 
 export function ForbiddenContent() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
-  const clearUser = useAuthStore((state) => state.clearUser)
-
+  const handleLogout = useLogout()
 
   const getDashboardHref = (role?: string) => {
     switch (role) {
@@ -21,17 +20,12 @@ export function ForbiddenContent() {
       case "MODERATOR":
         return "/moderator"
       case "GUEST":
-        return "/guest"
+        return "/"
       case "BUSINESS_PARTNER":
         return "/business-partner"
       default:
         return "/"
     }
-  }
-
-  const handleLogout = () => {
-    clearUser()
-    router.push("/login")
   }
 
   return (

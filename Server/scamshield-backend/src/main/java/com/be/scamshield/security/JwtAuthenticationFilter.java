@@ -49,18 +49,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         } catch (ExpiredJwtException ex) {
             log.error("Expired JWT token", ex);
+            if (continueWithoutAuthenticationOnAuthPath(request, response, filterChain)) {
+                return;
+            }
             handleAuthenticationFailure(request, response, "Token expired", ex);
             return;
         } catch (JwtException | IllegalArgumentException ex) {
             log.error("Invalid JWT token", ex);
+            if (continueWithoutAuthenticationOnAuthPath(request, response, filterChain)) {
+                return;
+            }
             handleAuthenticationFailure(request, response, "Invalid token", ex);
             return;
         } catch (BadCredentialsException ex) {
             log.error("Could not set user authentication in security context", ex);
+            if (continueWithoutAuthenticationOnAuthPath(request, response, filterChain)) {
+                return;
+            }
             handleAuthenticationFailure(request, response, ex.getMessage(), ex);
             return;
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);
+            if (continueWithoutAuthenticationOnAuthPath(request, response, filterChain)) {
+                return;
+            }
             handleAuthenticationFailure(request, response, "Invalid token", ex);
             return;
         }
@@ -78,6 +90,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 response,
                 new BadCredentialsException(message, ex)
         );
+    }
+
+    private boolean continueWithoutAuthenticationOnAuthPath(HttpServletRequest request,
+                                                            HttpServletResponse response,
+                                                            FilterChain filterChain) throws ServletException, IOException {
+        if (!isAuthPath(request)) {
+            return false;
+        }
+        SecurityContextHolder.clearContext();
+        filterChain.doFilter(request, response);
+        return true;
+    }
+
+    private boolean isAuthPath(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (!StringUtils.hasText(path)) {
+            path = request.getRequestURI();
+        }
+        return "/api/auth".equals(path) || path.startsWith("/api/auth/");
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

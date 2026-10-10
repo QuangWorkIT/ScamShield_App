@@ -1,7 +1,6 @@
-import { decodeJwt } from "@/lib/utils/jwtUtil"
 import { useAuthStore } from "@/store/auth.store"
-import { UserRole } from "@/types/user"
 import axios from "axios"
+import { authServices } from "@/features/auth/services/auth-services"
 
 const BE_URL = process.env.NEXT_PUBLIC_BE_URL
 
@@ -31,8 +30,6 @@ authorizeApi.interceptors.request.use((config) => {
     return config
 })
 
-let refreshPromise: Promise<string | null> | null = null
-
 authorizeApi.interceptors.response.use(
     (response) => {
         return response
@@ -48,43 +45,9 @@ authorizeApi.interceptors.response.use(
             originalRequest._retry = true
 
             try {
-                if (!refreshPromise) {
-                    refreshPromise = (async () => {
-                        const refreshUrl = `${BE_URL}/auth/refresh-token`
-
-                        const response = await axios.post(
-                            refreshUrl,
-                            {},
-                            { withCredentials: true }
-                        )
-
-                        const newAccessToken =
-                            response.data?.data?.accessToken || response.data?.accessToken
-
-                        if (!newAccessToken) {
-                            throw new Error("No access token returned from refresh API")
-                        }
-
-                        useAuthStore.getState().setToken(newAccessToken)
-
-                        const decoded = decodeJwt(newAccessToken)
-                        if (decoded?.id && decoded?.email && decoded?.role) {
-                            useAuthStore.getState().setUser({
-                                userId: String(decoded.id),
-                                email: decoded.email,
-                                role: decoded.role as UserRole,
-                            })
-                        }
-
-                        return newAccessToken
-                    })().finally(() => {
-                        refreshPromise = null
-                    })
-                }
-
-                const newAccessToken = await refreshPromise
-                if (newAccessToken) {
-                    originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`
+                const result = await authServices.refreshToken()
+                if (result?.accessToken) {
+                    originalRequest.headers["Authorization"] = `Bearer ${result.accessToken}`
                     return authorizeApi(originalRequest)
                 }
             } catch (refreshError) {
