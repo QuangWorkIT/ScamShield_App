@@ -23,11 +23,11 @@ public class PartnerMultipartConfig implements WebMvcConfigurer {
     @Override
     public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
         // Swagger and FormData may omit Content-Type on the JSON form field.
-        converters.add(new AbstractHttpMessageConverter<RegisterPartnerRequest>(
+        converters.add(new AbstractHttpMessageConverter<Object>(
                 MediaType.TEXT_PLAIN, MediaType.APPLICATION_OCTET_STREAM) {
             @Override
             protected boolean supports(Class<?> type) {
-                return type == RegisterPartnerRequest.class;
+                return type.getPackageName() != null && type.getPackageName().startsWith("com.be.scamshield.dto");
             }
 
             @Override
@@ -36,18 +36,18 @@ public class PartnerMultipartConfig implements WebMvcConfigurer {
             }
 
             @Override
-            protected RegisterPartnerRequest readInternal(Class<? extends RegisterPartnerRequest> type,
+            protected Object readInternal(Class<? extends Object> type,
                     HttpInputMessage input) throws IOException {
                 try {
-                    return objectMapper.readValue(input.getBody(), RegisterPartnerRequest.class);
+                    return objectMapper.readValue(input.getBody(), type);
                 } catch (JacksonException ex) {
                     throw new HttpMessageNotReadableException("Part request phải là JSON hợp lệ", ex, input);
                 }
             }
 
             @Override
-            protected void writeInternal(RegisterPartnerRequest request, HttpOutputMessage output) {
-                throw new UnsupportedOperationException("Converter chỉ dùng để đọc hồ sơ đăng ký");
+            protected void writeInternal(Object request, HttpOutputMessage output) {
+                throw new UnsupportedOperationException("Converter chỉ dùng để đọc multipart JSON");
             }
         });
     }

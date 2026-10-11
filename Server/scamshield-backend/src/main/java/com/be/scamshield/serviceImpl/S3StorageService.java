@@ -28,23 +28,120 @@ import java.util.UUID;
 @Slf4j
 public class S3StorageService {
 
-    @Value("${app.aws.s3.region:ap-southeast-1}")
+    @Value("${AWS_REGION:${app.aws.s3.region:ap-south-1}}")
     private String region;
 
-    @Value("${app.aws.s3.access-key-id:}")
+    @Value("${AWS_ACCESS_KEY_ID:${app.aws.s3.access-key-id:}}")
     private String accessKeyId;
 
-    @Value("${app.aws.s3.secret-access-key:}")
+    @Value("${AWS_SECRET_ACCESS_KEY:${app.aws.s3.secret-access-key:}}")
     private String secretAccessKey;
 
-    @Value("${app.aws.s3.bucket-name:scamshield-evidence-bucket}")
+    @Value("${AWS_S3_BUCKET_NAME:${app.aws.s3.bucket-name:evidences}}")
     private String bucketName;
 
-    @Value("${app.aws.s3.endpoint-override:}")
+    @Value("${AWS_S3_ENDPOINT_OVERRIDE:${app.aws.s3.endpoint-override:}}")
     private String endpointOverride;
 
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        log.info("[S3StorageService] Initialized with AccessKeyId='{}', Endpoint='{}', Bucket='{}'", 
+                getAccessKeyId(), getEndpointOverride(), getBucketName());
+        if (isAwsConfigured()) {
+            log.info("S3/Supabase Storage successfully configured: bucket={}, endpoint={}, region={}", 
+                    getBucketName(), getEndpointOverride(), getRegion());
+        } else {
+            log.warn("S3/Supabase Storage credentials NOT detected. Please check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env");
+        }
+    }
+
     public boolean isAwsConfigured() {
-        return StringUtils.hasText(accessKeyId) && StringUtils.hasText(secretAccessKey);
+        return StringUtils.hasText(getAccessKeyId()) && StringUtils.hasText(getSecretAccessKey());
+    }
+
+    private String getAccessKeyId() {
+        if (StringUtils.hasText(accessKeyId)) {
+            return accessKeyId.trim();
+        }
+        String sysProp = System.getProperty("AWS_ACCESS_KEY_ID");
+        if (StringUtils.hasText(sysProp)) {
+            return sysProp.trim();
+        }
+        String sysEnv = System.getenv("AWS_ACCESS_KEY_ID");
+        if (StringUtils.hasText(sysEnv)) {
+            return sysEnv.trim();
+        }
+        com.be.scamshield.config.EnvLoader.loadEnv();
+        String reloaded = System.getProperty("AWS_ACCESS_KEY_ID");
+        return StringUtils.hasText(reloaded) ? reloaded.trim() : "";
+    }
+
+    private String getSecretAccessKey() {
+        if (StringUtils.hasText(secretAccessKey)) {
+            return secretAccessKey.trim();
+        }
+        String sysProp = System.getProperty("AWS_SECRET_ACCESS_KEY");
+        if (StringUtils.hasText(sysProp)) {
+            return sysProp.trim();
+        }
+        String sysEnv = System.getenv("AWS_SECRET_ACCESS_KEY");
+        if (StringUtils.hasText(sysEnv)) {
+            return sysEnv.trim();
+        }
+        com.be.scamshield.config.EnvLoader.loadEnv();
+        String reloaded = System.getProperty("AWS_SECRET_ACCESS_KEY");
+        return StringUtils.hasText(reloaded) ? reloaded.trim() : "";
+    }
+
+    private String getEndpointOverride() {
+        if (StringUtils.hasText(endpointOverride)) {
+            return endpointOverride.trim();
+        }
+        String sysProp = System.getProperty("AWS_S3_ENDPOINT_OVERRIDE");
+        if (StringUtils.hasText(sysProp)) {
+            return sysProp.trim();
+        }
+        String sysEnv = System.getenv("AWS_S3_ENDPOINT_OVERRIDE");
+        if (StringUtils.hasText(sysEnv)) {
+            return sysEnv.trim();
+        }
+        com.be.scamshield.config.EnvLoader.loadEnv();
+        String reloaded = System.getProperty("AWS_S3_ENDPOINT_OVERRIDE");
+        return StringUtils.hasText(reloaded) ? reloaded.trim() : "";
+    }
+
+    private String getBucketName() {
+        if (StringUtils.hasText(bucketName)) {
+            return bucketName.trim();
+        }
+        String sysProp = System.getProperty("AWS_S3_BUCKET_NAME");
+        if (StringUtils.hasText(sysProp)) {
+            return sysProp.trim();
+        }
+        String sysEnv = System.getenv("AWS_S3_BUCKET_NAME");
+        if (StringUtils.hasText(sysEnv)) {
+            return sysEnv.trim();
+        }
+        com.be.scamshield.config.EnvLoader.loadEnv();
+        String reloaded = System.getProperty("AWS_S3_BUCKET_NAME");
+        return StringUtils.hasText(reloaded) ? reloaded.trim() : "evidences";
+    }
+
+    private String getRegion() {
+        if (StringUtils.hasText(region)) {
+            return region.trim();
+        }
+        String sysProp = System.getProperty("AWS_REGION");
+        if (StringUtils.hasText(sysProp)) {
+            return sysProp.trim();
+        }
+        String sysEnv = System.getenv("AWS_REGION");
+        if (StringUtils.hasText(sysEnv)) {
+            return sysEnv.trim();
+        }
+        com.be.scamshield.config.EnvLoader.loadEnv();
+        String reloaded = System.getProperty("AWS_REGION");
+        return StringUtils.hasText(reloaded) ? reloaded.trim() : "ap-south-1";
     }
 
     public UploadResult uploadFile(MultipartFile file, String folder) {
@@ -59,27 +156,27 @@ public class S3StorageService {
                     System.currentTimeMillis(),
                     extension != null ? "." + extension : "");
 
-            String fileUrl;
-            if (isAwsConfigured()) {
-                S3Client s3Client = createS3Client();
-                PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                        .bucket(bucketName)
-                        .key(objectKey)
-                        .contentType(file.getContentType())
-                        .build();
-
-                s3Client.putObject(putObjectRequest, RequestBody.fromBytes(bytes));
-                fileUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, objectKey);
-                log.info("File uploaded successfully to AWS S3: {}", fileUrl);
-            } else {
-                fileUrl = String.format("https://s3.localmock.scamshield.vn/%s/%s", bucketName, objectKey);
-                log.warn("AWS S3 credentials not provided. Generated mock S3 URL: {}", fileUrl);
+            if (!isAwsConfigured()) {
+                throw new IllegalArgumentException("Supabase Storage credentials are not configured. Please set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_ENDPOINT_OVERRIDE in .env!");
             }
 
+            S3Client s3Client = createS3Client();
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(getBucketName())
+                    .key(objectKey)
+                    .contentType(file.getContentType())
+                    .build();
+
+            s3Client.putObject(putObjectRequest, RequestBody.fromBytes(bytes));
+            String fileUrl = buildPublicUrl(objectKey);
+            log.info("File uploaded successfully to Supabase Storage: {}", fileUrl);
+
             return new UploadResult(fileUrl, fileHash, objectKey, originalFilename);
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to upload file to S3: {}", e.getMessage(), e);
-            throw new RuntimeException("Tải tệp lên S3 thất bại: " + e.getMessage(), e);
+            log.error("Failed to upload file to Supabase Storage: {}", e.getMessage(), e);
+            throw new IllegalArgumentException("Failed to upload file to Supabase Storage: " + e.getMessage(), e);
         }
     }
 
@@ -92,40 +189,48 @@ public class S3StorageService {
 
         long expirationSeconds = 900; // 15 minutes
 
-        if (isAwsConfigured()) {
-            try (S3Presigner presigner = createS3Presigner()) {
-                PutObjectRequest objectRequest = PutObjectRequest.builder()
-                        .bucket(bucketName)
-                        .key(objectKey)
-                        .contentType(contentType)
-                        .build();
+        if (!isAwsConfigured()) {
+            throw new IllegalArgumentException("Supabase Storage credentials are not configured. Please set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_ENDPOINT_OVERRIDE in .env!");
+        }
 
-                PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                        .signatureDuration(Duration.ofSeconds(expirationSeconds))
-                        .putObjectRequest(objectRequest)
-                        .build();
+        try (S3Presigner presigner = createS3Presigner()) {
+            PutObjectRequest objectRequest = PutObjectRequest.builder()
+                    .bucket(getBucketName())
+                    .key(objectKey)
+                    .contentType(contentType)
+                    .build();
 
-                PresignedPutObjectRequest presignedRequest = presigner.presignPutObject(presignRequest);
-                String uploadUrl = presignedRequest.url().toString();
-                String fileUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, objectKey);
+            PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofSeconds(expirationSeconds))
+                    .putObjectRequest(objectRequest)
+                    .build();
 
-                return PresignedUrlResponse.builder()
-                        .uploadUrl(uploadUrl)
-                        .fileUrl(fileUrl)
-                        .objectKey(objectKey)
-                        .expiresInSeconds(expirationSeconds)
-                        .build();
-            }
-        } else {
-            String fileUrl = String.format("https://s3.localmock.scamshield.vn/%s/%s", bucketName, objectKey);
-            String mockUploadUrl = String.format("https://s3.localmock.scamshield.vn/upload/%s", objectKey);
+            PresignedPutObjectRequest presignedRequest = presigner.presignPutObject(presignRequest);
+            String uploadUrl = presignedRequest.url().toString();
+            String fileUrl = buildPublicUrl(objectKey);
+
             return PresignedUrlResponse.builder()
-                    .uploadUrl(mockUploadUrl)
+                    .uploadUrl(uploadUrl)
                     .fileUrl(fileUrl)
                     .objectKey(objectKey)
                     .expiresInSeconds(expirationSeconds)
                     .build();
+        } catch (Exception e) {
+            log.error("Failed to generate presigned URL: {}", e.getMessage(), e);
+            throw new IllegalArgumentException("Failed to generate S3 presigned URL: " + e.getMessage(), e);
         }
+    }
+
+    public String buildPublicUrl(String objectKey) {
+        String override = getEndpointOverride();
+        if (StringUtils.hasText(override)) {
+            if (override.contains("supabase.co")) {
+                String baseUrl = override.replaceAll("/storage/v1/s3/?$", "");
+                return String.format("%s/storage/v1/object/public/%s/%s", baseUrl, getBucketName(), objectKey);
+            }
+            return String.format("%s/%s/%s", override, getBucketName(), objectKey);
+        }
+        return String.format("https://%s.s3.%s.amazonaws.com/%s", getBucketName(), getRegion(), objectKey);
     }
 
     public String calculateHash(byte[] fileBytes) {
@@ -140,26 +245,28 @@ public class S3StorageService {
     }
 
     private S3Client createS3Client() {
-        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(getAccessKeyId(), getSecretAccessKey());
         var builder = S3Client.builder()
-                .region(Region.of(region))
+                .region(Region.of(region != null ? region.trim() : "ap-southeast-1"))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials));
 
-        if (StringUtils.hasText(endpointOverride)) {
-            builder.endpointOverride(java.net.URI.create(endpointOverride))
+        String override = getEndpointOverride();
+        if (StringUtils.hasText(override)) {
+            builder.endpointOverride(java.net.URI.create(override))
                    .forcePathStyle(true);
         }
         return builder.build();
     }
 
     private S3Presigner createS3Presigner() {
-        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(getAccessKeyId(), getSecretAccessKey());
         var builder = S3Presigner.builder()
-                .region(Region.of(region))
+                .region(Region.of(region != null ? region.trim() : "ap-southeast-1"))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials));
 
-        if (StringUtils.hasText(endpointOverride)) {
-            builder.endpointOverride(java.net.URI.create(endpointOverride));
+        String override = getEndpointOverride();
+        if (StringUtils.hasText(override)) {
+            builder.endpointOverride(java.net.URI.create(override));
         }
         return builder.build();
     }

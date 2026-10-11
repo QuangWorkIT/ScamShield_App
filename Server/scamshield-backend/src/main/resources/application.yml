@@ -8,11 +8,11 @@ spring:
       max-file-size: 25MB
       max-request-size: 80MB
 
-  # Database Configuration (PostgreSQL)
+  # Database Configuration (PostgreSQL / Supabase)
   datasource:
-    url: jdbc:postgresql://localhost:5432/scamshield-db
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/scamshield-db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
     hikari:
       connection-init-sql: SET TIME ZONE 'Asia/Ho_Chi_Minh'
@@ -55,10 +55,10 @@ firebase:
 app:
   aws:
     s3:
-      region: ${AWS_REGION:ap-southeast-1}
+      region: ${AWS_REGION:ap-south-1}
       access-key-id: ${AWS_ACCESS_KEY_ID:}
       secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
-      bucket-name: ${AWS_S3_BUCKET_NAME:scamshield-evidence-bucket}
+      bucket-name: ${AWS_S3_BUCKET_NAME:evidences}
       endpoint-override: ${AWS_S3_ENDPOINT_OVERRIDE:}
   otp:
     email-expiration-ms: ${EMAIL_OTP_EXPIRATION_MS:300000}
