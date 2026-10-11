@@ -1,7 +1,6 @@
 package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.dto.response.PresignedUrlResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -18,7 +17,6 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
-import java.io.InputStream;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
@@ -26,122 +24,131 @@ import java.util.UUID;
 
 @Service
 @Slf4j
-public class S3StorageService {
+public class SupabaseStorageService {
 
-    @Value("${AWS_REGION:${app.aws.s3.region:ap-south-1}}")
+    @Value("${SUPABASE_STORAGE_REGION:${AWS_REGION:${app.supabase.storage.region:${app.aws.s3.region:ap-south-1}}}}")
     private String region;
 
-    @Value("${AWS_ACCESS_KEY_ID:${app.aws.s3.access-key-id:}}")
+    @Value("${SUPABASE_STORAGE_ACCESS_KEY:${AWS_ACCESS_KEY_ID:${app.supabase.storage.access-key-id:}}}")
     private String accessKeyId;
 
-    @Value("${AWS_SECRET_ACCESS_KEY:${app.aws.s3.secret-access-key:}}")
+    @Value("${SUPABASE_STORAGE_SECRET_KEY:${AWS_SECRET_ACCESS_KEY:${app.supabase.storage.secret-access-key:}}}")
     private String secretAccessKey;
 
-    @Value("${AWS_S3_BUCKET_NAME:${app.aws.s3.bucket-name:evidences}}")
+    @Value("${SUPABASE_STORAGE_BUCKET_NAME:${AWS_S3_BUCKET_NAME:${app.supabase.storage.bucket-name:evidences}}}")
     private String bucketName;
 
-    @Value("${AWS_S3_ENDPOINT_OVERRIDE:${app.aws.s3.endpoint-override:}}")
+    @Value("${SUPABASE_STORAGE_ENDPOINT:${AWS_S3_ENDPOINT_OVERRIDE:${app.supabase.storage.endpoint-override:}}}")
     private String endpointOverride;
 
     @jakarta.annotation.PostConstruct
     public void init() {
-        log.info("[S3StorageService] Initialized with AccessKeyId='{}', Endpoint='{}', Bucket='{}'", 
+        log.info("[SupabaseStorageService] Initialized with AccessKeyId='{}', Endpoint='{}', Bucket='{}'", 
                 getAccessKeyId(), getEndpointOverride(), getBucketName());
-        if (isAwsConfigured()) {
-            log.info("S3/Supabase Storage successfully configured: bucket={}, endpoint={}, region={}", 
+        if (isStorageConfigured()) {
+            log.info("Supabase Storage successfully configured: bucket={}, endpoint={}, region={}", 
                     getBucketName(), getEndpointOverride(), getRegion());
         } else {
-            log.warn("S3/Supabase Storage credentials NOT detected. Please check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env");
+            log.warn("Supabase Storage credentials NOT detected. Please check SUPABASE_STORAGE_ACCESS_KEY / AWS_ACCESS_KEY_ID and SUPABASE_STORAGE_SECRET_KEY / AWS_SECRET_ACCESS_KEY in .env");
         }
     }
 
-    public boolean isAwsConfigured() {
+    public boolean isStorageConfigured() {
         return StringUtils.hasText(getAccessKeyId()) && StringUtils.hasText(getSecretAccessKey());
+    }
+
+    public boolean isAwsConfigured() {
+        return isStorageConfigured();
     }
 
     private String getAccessKeyId() {
         if (StringUtils.hasText(accessKeyId)) {
             return accessKeyId.trim();
         }
-        String sysProp = System.getProperty("AWS_ACCESS_KEY_ID");
-        if (StringUtils.hasText(sysProp)) {
-            return sysProp.trim();
-        }
-        String sysEnv = System.getenv("AWS_ACCESS_KEY_ID");
-        if (StringUtils.hasText(sysEnv)) {
-            return sysEnv.trim();
+        for (String key : new String[]{"SUPABASE_STORAGE_ACCESS_KEY", "AWS_ACCESS_KEY_ID"}) {
+            String prop = System.getProperty(key);
+            if (StringUtils.hasText(prop)) return prop.trim();
+            String env = System.getenv(key);
+            if (StringUtils.hasText(env)) return env.trim();
         }
         com.be.scamshield.config.EnvLoader.loadEnv();
-        String reloaded = System.getProperty("AWS_ACCESS_KEY_ID");
-        return StringUtils.hasText(reloaded) ? reloaded.trim() : "";
+        for (String key : new String[]{"SUPABASE_STORAGE_ACCESS_KEY", "AWS_ACCESS_KEY_ID"}) {
+            String reloaded = System.getProperty(key);
+            if (StringUtils.hasText(reloaded)) return reloaded.trim();
+        }
+        return "";
     }
 
     private String getSecretAccessKey() {
         if (StringUtils.hasText(secretAccessKey)) {
             return secretAccessKey.trim();
         }
-        String sysProp = System.getProperty("AWS_SECRET_ACCESS_KEY");
-        if (StringUtils.hasText(sysProp)) {
-            return sysProp.trim();
-        }
-        String sysEnv = System.getenv("AWS_SECRET_ACCESS_KEY");
-        if (StringUtils.hasText(sysEnv)) {
-            return sysEnv.trim();
+        for (String key : new String[]{"SUPABASE_STORAGE_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"}) {
+            String prop = System.getProperty(key);
+            if (StringUtils.hasText(prop)) return prop.trim();
+            String env = System.getenv(key);
+            if (StringUtils.hasText(env)) return env.trim();
         }
         com.be.scamshield.config.EnvLoader.loadEnv();
-        String reloaded = System.getProperty("AWS_SECRET_ACCESS_KEY");
-        return StringUtils.hasText(reloaded) ? reloaded.trim() : "";
+        for (String key : new String[]{"SUPABASE_STORAGE_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"}) {
+            String reloaded = System.getProperty(key);
+            if (StringUtils.hasText(reloaded)) return reloaded.trim();
+        }
+        return "";
     }
 
     private String getEndpointOverride() {
         if (StringUtils.hasText(endpointOverride)) {
             return endpointOverride.trim();
         }
-        String sysProp = System.getProperty("AWS_S3_ENDPOINT_OVERRIDE");
-        if (StringUtils.hasText(sysProp)) {
-            return sysProp.trim();
-        }
-        String sysEnv = System.getenv("AWS_S3_ENDPOINT_OVERRIDE");
-        if (StringUtils.hasText(sysEnv)) {
-            return sysEnv.trim();
+        for (String key : new String[]{"SUPABASE_STORAGE_ENDPOINT", "AWS_S3_ENDPOINT_OVERRIDE"}) {
+            String prop = System.getProperty(key);
+            if (StringUtils.hasText(prop)) return prop.trim();
+            String env = System.getenv(key);
+            if (StringUtils.hasText(env)) return env.trim();
         }
         com.be.scamshield.config.EnvLoader.loadEnv();
-        String reloaded = System.getProperty("AWS_S3_ENDPOINT_OVERRIDE");
-        return StringUtils.hasText(reloaded) ? reloaded.trim() : "";
+        for (String key : new String[]{"SUPABASE_STORAGE_ENDPOINT", "AWS_S3_ENDPOINT_OVERRIDE"}) {
+            String reloaded = System.getProperty(key);
+            if (StringUtils.hasText(reloaded)) return reloaded.trim();
+        }
+        return "";
     }
 
     private String getBucketName() {
         if (StringUtils.hasText(bucketName)) {
             return bucketName.trim();
         }
-        String sysProp = System.getProperty("AWS_S3_BUCKET_NAME");
-        if (StringUtils.hasText(sysProp)) {
-            return sysProp.trim();
-        }
-        String sysEnv = System.getenv("AWS_S3_BUCKET_NAME");
-        if (StringUtils.hasText(sysEnv)) {
-            return sysEnv.trim();
+        for (String key : new String[]{"SUPABASE_STORAGE_BUCKET_NAME", "AWS_S3_BUCKET_NAME"}) {
+            String prop = System.getProperty(key);
+            if (StringUtils.hasText(prop)) return prop.trim();
+            String env = System.getenv(key);
+            if (StringUtils.hasText(env)) return env.trim();
         }
         com.be.scamshield.config.EnvLoader.loadEnv();
-        String reloaded = System.getProperty("AWS_S3_BUCKET_NAME");
-        return StringUtils.hasText(reloaded) ? reloaded.trim() : "evidences";
+        for (String key : new String[]{"SUPABASE_STORAGE_BUCKET_NAME", "AWS_S3_BUCKET_NAME"}) {
+            String reloaded = System.getProperty(key);
+            if (StringUtils.hasText(reloaded)) return reloaded.trim();
+        }
+        return "evidences";
     }
 
     private String getRegion() {
         if (StringUtils.hasText(region)) {
             return region.trim();
         }
-        String sysProp = System.getProperty("AWS_REGION");
-        if (StringUtils.hasText(sysProp)) {
-            return sysProp.trim();
-        }
-        String sysEnv = System.getenv("AWS_REGION");
-        if (StringUtils.hasText(sysEnv)) {
-            return sysEnv.trim();
+        for (String key : new String[]{"SUPABASE_STORAGE_REGION", "AWS_REGION"}) {
+            String prop = System.getProperty(key);
+            if (StringUtils.hasText(prop)) return prop.trim();
+            String env = System.getenv(key);
+            if (StringUtils.hasText(env)) return env.trim();
         }
         com.be.scamshield.config.EnvLoader.loadEnv();
-        String reloaded = System.getProperty("AWS_REGION");
-        return StringUtils.hasText(reloaded) ? reloaded.trim() : "ap-south-1";
+        for (String key : new String[]{"SUPABASE_STORAGE_REGION", "AWS_REGION"}) {
+            String reloaded = System.getProperty(key);
+            if (StringUtils.hasText(reloaded)) return reloaded.trim();
+        }
+        return "ap-south-1";
     }
 
     public UploadResult uploadFile(MultipartFile file, String folder) {
@@ -156,8 +163,8 @@ public class S3StorageService {
                     System.currentTimeMillis(),
                     extension != null ? "." + extension : "");
 
-            if (!isAwsConfigured()) {
-                throw new IllegalArgumentException("Supabase Storage credentials are not configured. Please set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_ENDPOINT_OVERRIDE in .env!");
+            if (!isStorageConfigured()) {
+                throw new IllegalArgumentException("Supabase Storage credentials are not configured. Please set SUPABASE_STORAGE_ACCESS_KEY / AWS_ACCESS_KEY_ID, SUPABASE_STORAGE_SECRET_KEY, and SUPABASE_STORAGE_ENDPOINT in .env!");
             }
 
             S3Client s3Client = createS3Client();
@@ -189,8 +196,8 @@ public class S3StorageService {
 
         long expirationSeconds = 900; // 15 minutes
 
-        if (!isAwsConfigured()) {
-            throw new IllegalArgumentException("Supabase Storage credentials are not configured. Please set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_ENDPOINT_OVERRIDE in .env!");
+        if (!isStorageConfigured()) {
+            throw new IllegalArgumentException("Supabase Storage credentials are not configured. Please set SUPABASE_STORAGE_ACCESS_KEY / AWS_ACCESS_KEY_ID, SUPABASE_STORAGE_SECRET_KEY, and SUPABASE_STORAGE_ENDPOINT in .env!");
         }
 
         try (S3Presigner presigner = createS3Presigner()) {
@@ -216,8 +223,8 @@ public class S3StorageService {
                     .expiresInSeconds(expirationSeconds)
                     .build();
         } catch (Exception e) {
-            log.error("Failed to generate presigned URL: {}", e.getMessage(), e);
-            throw new IllegalArgumentException("Failed to generate S3 presigned URL: " + e.getMessage(), e);
+            log.error("Failed to generate presigned URL for Supabase Storage: {}", e.getMessage(), e);
+            throw new IllegalArgumentException("Failed to generate Supabase Storage presigned URL: " + e.getMessage(), e);
         }
     }
 
@@ -230,7 +237,7 @@ public class S3StorageService {
             }
             return String.format("%s/%s/%s", override, getBucketName(), objectKey);
         }
-        return String.format("https://%s.s3.%s.amazonaws.com/%s", getBucketName(), getRegion(), objectKey);
+        return String.format("https://%s.storage.supabase.co/storage/v1/object/public/%s/%s", getEndpointOverride(), getBucketName(), objectKey);
     }
 
     public String calculateHash(byte[] fileBytes) {
@@ -247,7 +254,7 @@ public class S3StorageService {
     private S3Client createS3Client() {
         AwsBasicCredentials credentials = AwsBasicCredentials.create(getAccessKeyId(), getSecretAccessKey());
         var builder = S3Client.builder()
-                .region(Region.of(region != null ? region.trim() : "ap-southeast-1"))
+                .region(Region.of(getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials));
 
         String override = getEndpointOverride();
@@ -261,7 +268,7 @@ public class S3StorageService {
     private S3Presigner createS3Presigner() {
         AwsBasicCredentials credentials = AwsBasicCredentials.create(getAccessKeyId(), getSecretAccessKey());
         var builder = S3Presigner.builder()
-                .region(Region.of(region != null ? region.trim() : "ap-southeast-1"))
+                .region(Region.of(getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials));
 
         String override = getEndpointOverride();

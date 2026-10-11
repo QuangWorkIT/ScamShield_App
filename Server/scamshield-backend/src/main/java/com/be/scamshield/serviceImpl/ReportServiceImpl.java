@@ -40,7 +40,7 @@ public class ReportServiceImpl implements IReportService {
     private final IndicatorRepository indicatorRepository;
     private final ScamCategorieRepository scamCategorieRepository;
     private final UserRepository userRepository;
-    private final S3StorageService s3StorageService;
+    private final SupabaseStorageService supabaseStorageService;
 
     @Override
     @Transactional
@@ -86,12 +86,12 @@ public class ReportServiceImpl implements IReportService {
 
         Report savedReport = reportRepository.save(report);
 
-        // 5. Process Evidence Attachments (Direct Multipart Files Uploaded to S3)
+        // 5. Process Evidence Attachments (Direct Multipart Files Uploaded to Supabase Storage)
         List<ReportEvidence> evidenceList = new ArrayList<>();
         if (files != null && !files.isEmpty()) {
             for (MultipartFile file : files) {
                 if (!file.isEmpty()) {
-                    S3StorageService.UploadResult uploadResult = s3StorageService.uploadFile(file, "evidences");
+                    SupabaseStorageService.UploadResult uploadResult = supabaseStorageService.uploadFile(file, "evidences");
                     ReportEvidence evidence = ReportEvidence.builder()
                             .report(savedReport)
                             .evidenceType(getEvidenceType(file.getOriginalFilename()))
@@ -105,7 +105,7 @@ public class ReportServiceImpl implements IReportService {
             }
         }
 
-        // 6. Process Evidence Items (Pre-uploaded S3 URLs)
+        // 6. Process Evidence Items (Pre-uploaded Supabase Storage URLs)
         if (request.getEvidences() != null && !request.getEvidences().isEmpty()) {
             for (EvidenceItemDto dto : request.getEvidences()) {
                 if (StringUtils.hasText(dto.getFileUrl())) {
@@ -151,7 +151,7 @@ public class ReportServiceImpl implements IReportService {
 
     @Override
     public PresignedUrlResponse generatePresignedUrl(PresignedUrlRequest request) {
-        return s3StorageService.generatePresignedUploadUrl(request.getFileName(), request.getContentType());
+        return supabaseStorageService.generatePresignedUploadUrl(request.getFileName(), request.getContentType());
     }
 
     @Override

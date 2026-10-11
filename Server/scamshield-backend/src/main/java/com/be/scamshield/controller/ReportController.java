@@ -30,7 +30,7 @@ public class ReportController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Nộp báo cáo lừa đảo kèm file ảnh (Direct Multipart Upload)", 
-               description = "Nộp thông tin báo cáo lừa đảo kèm trực tiếp danh sách tệp ảnh bằng chứng. Tệp sẽ được băm SHA-256 và tự động tải lên AWS S3 bucket.")
+               description = "Nộp thông tin báo cáo lừa đảo kèm trực tiếp danh sách tệp ảnh bằng chứng. Tệp sẽ được băm SHA-256 và tự động tải lên Supabase Storage bucket.")
     public ResponseEntity<BaseResponse<ReportResponse>> createReportWithFiles(
             @Valid @RequestPart("request") CreateReportRequest request,
             @RequestPart(value = "files", required = false) List<MultipartFile> files,
@@ -42,8 +42,8 @@ public class ReportController {
     }
 
     @PostMapping(value = "/json", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Nộp báo cáo lừa đảo (Sử dụng URL ảnh đã tải lên S3 trước)", 
-               description = "Nộp thông tin báo cáo với danh sách S3 URL ảnh bằng chứng đã upload bằng Presigned URL.")
+    @Operation(summary = "Nộp báo cáo lừa đảo (Sử dụng URL ảnh đã tải lên Supabase Storage trước)", 
+               description = "Nộp thông tin báo cáo với danh sách URL ảnh bằng chứng đã upload lên Supabase Storage bằng Presigned URL.")
     public ResponseEntity<BaseResponse<ReportResponse>> createReportWithUrls(
             @Valid @RequestBody CreateReportRequest request,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -54,13 +54,13 @@ public class ReportController {
     }
 
     @PostMapping("/presigned-url")
-    @Operation(summary = "Xin AWS S3 Presigned Upload URL", 
-               description = "Khởi tạo URL tải ảnh trực tiếp từ trình duyệt Frontend lên AWS S3 (Presigned PUT URL, có thời hạn 15 phút).")
+    @Operation(summary = "Xin Supabase Storage Presigned Upload URL", 
+               description = "Khởi tạo URL tải ảnh trực tiếp từ trình duyệt Frontend lên Supabase Storage (Presigned PUT URL, có thời hạn 15 phút).")
     public ResponseEntity<BaseResponse<PresignedUrlResponse>> getPresignedUploadUrl(
             @Valid @RequestBody PresignedUrlRequest request) {
         
         PresignedUrlResponse response = reportService.generatePresignedUrl(request);
-        return ResponseEntity.ok(new BaseResponse<>(true, "Tạo S3 Presigned Upload URL thành công", response));
+        return ResponseEntity.ok(new BaseResponse<>(true, "Tạo Supabase Storage Presigned Upload URL thành công", response));
     }
 
     @GetMapping("/{id}")
