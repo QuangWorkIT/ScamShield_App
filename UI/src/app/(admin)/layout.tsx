@@ -1,7 +1,9 @@
+import { RoleGuard } from "@/components/shared/role-guard"
+
 export default function AdminLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return <div>{children}</div>
+  return <RoleGuard allowedRoles={["ADMINISTRATOR"]}>{children}</RoleGuard>
 }
