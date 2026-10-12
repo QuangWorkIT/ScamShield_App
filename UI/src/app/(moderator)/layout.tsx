@@ -1,12 +1,16 @@
+import { RoleGuard } from "@/components/shared/role-guard"
+
 export default function ModeratorLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   return (
-    <div>
-      <p>This is moderator layout</p>
-      {children}
-    </div>
+    <RoleGuard allowedRoles={["MODERATOR"]}>
+      <div>
+        <p>This is moderator layout</p>
+        {children}
+      </div>
+    </RoleGuard>
   )
 }

@@ -1,15 +1,52 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
-import { ShieldCheck, Moon, Sun, ArrowUpRight } from "@phosphor-icons/react"
+import { ShieldCheck, Moon, Sun, ArrowUpRight, User as UserIcon } from "@phosphor-icons/react"
 import { GUEST_NAV_ITEMS } from "@/config/navigation/guest-nav"
+import { useAuthStore } from "@/store/auth.store"
+import { decodeJwt } from "@/lib/utils/jwtUtil"
+import { UserRole } from "@/types/user"
 import { cn } from "@/lib/utils"
+
+function getDashboardHref(role: UserRole | string | null | undefined): string {
+  switch (role) {
+    case "ADMINISTRATOR":
+      return "/admin"
+    case "REGISTERED_USER":
+      return "/user"
+    case "MODERATOR":
+      return "/moderator"
+    case "GUEST":
+      return "/guest"
+    case "BUSINESS_PARTNER":
+      return "/business-partner"
+    default:
+      return "/user"
+  }
+}
 
 export function GuestHeader() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  const token = useAuthStore((state) => state.token)
+  const user = useAuthStore((state) => state.user)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  let currentRole: UserRole | string | null = user?.role || null
+  if (!currentRole && token) {
+    const decoded = decodeJwt(token)
+    currentRole = (decoded?.role as UserRole) || null
+  }
+
+  const isLoggedIn = mounted && Boolean(token || user)
+  const dashboardHref = getDashboardHref(currentRole)
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#C6C6CE]/30 bg-white/90 backdrop-blur-md dark:border-border dark:bg-background/90">
@@ -57,20 +94,33 @@ export function GuestHeader() {
 
         {/* Right: User Actions & Theme Toggle */}
         <div className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="rounded-full px-4 py-2 text-sm font-medium text-[#45464D] transition-colors hover:text-[#131B2E] dark:text-muted-foreground dark:hover:text-foreground"
-          >
-            Đăng nhập
-          </Link>
+          {isLoggedIn ? (
+            <Link
+              href={dashboardHref}
+              className="flex size-9 items-center justify-center rounded-full bg-[#0B132B] text-white shadow-sm transition-all hover:bg-[#111A36] hover:scale-105 active:scale-95 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+              aria-label="Trang quản lý cá nhân"
+              title="Đi đến bảng điều khiển"
+            >
+              <UserIcon size={18} weight="bold" />
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="rounded-full px-4 py-2 text-sm font-medium text-[#45464D] transition-colors hover:text-[#131B2E] dark:text-muted-foreground dark:hover:text-foreground"
+              >
+                Đăng nhập
+              </Link>
 
-          <Link
-            href="/register"
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#0B132B] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#111A36] active:scale-95 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-          >
-            <span>Tạo tài khoản miễn phí</span>
-            <ArrowUpRight size={14} weight="bold" />
-          </Link>
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-1.5 rounded-full bg-[#0B132B] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#111A36] active:scale-95 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+              >
+                <span>Tạo tài khoản miễn phí</span>
+                <ArrowUpRight size={14} weight="bold" />
+              </Link>
+            </>
+          )}
 
           {/* Theme Toggle Button */}
           <button

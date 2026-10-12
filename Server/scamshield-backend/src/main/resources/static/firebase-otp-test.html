@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScamShield · Firebase OTP Test</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f1f5fb;color:#17243b;font:15px/1.6 system-ui,sans-serif}main{max-width:860px;margin:48px auto;padding:0 20px}h1{font-size:30px;line-height:1.2;margin:8px 0}h2{font-size:18px;margin:0 0 16px}.badge{color:#3158be;font-weight:700;font-size:12px;letter-spacing:1px}.intro{color:#617087;margin:12px 0 24px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}section{background:white;border:1px solid #dce4f0;border-radius:16px;padding:24px;box-shadow:0 8px 28px #1c325808}label{display:block;font-weight:600;margin:12px 0 5px}input,textarea{width:100%;padding:11px 12px;border:1px solid #c8d3e3;border-radius:8px;font:inherit;background:#fff;color:inherit}textarea{font:13px/1.6 monospace;resize:vertical}input:focus,textarea:focus{outline:2px solid #a7bcfc;border-color:#3158be}button{margin-top:16px;background:#3158be;color:white;border:0;border-radius:8px;padding:12px 18px;font:600 14px system-ui;cursor:pointer;width:100%}button:disabled{opacity:.45;cursor:not-allowed}.hint{font-size:13px;color:#617087;margin:12px 0}.notice{background:#eaf0ff;border-radius:10px;padding:14px 18px;margin:20px 0;font-size:13px}.output{margin-top:20px}pre{white-space:pre-wrap;word-break:break-word;font:13px/1.6 monospace;margin:0}.status{color:#3158be;font-weight:600;margin-bottom:10px}.status[data-kind=error]{color:#b42318}.status[data-kind=success]{color:#13734a}a{color:#3158be}#captcha{margin-top:16px;min-height:12px;overflow:auto}hr{border:0;border-top:1px solid #e5ebf4;margin:24px 0}@media(max-width:680px){main{margin:24px auto}.grid{grid-template-columns:1fr}section{padding:20px}h1{font-size:26px}}
+  </style>
+  <script type="module" src="firebase-otp-test.js"></script>
+</head>
+<body>
+<main>
+  <span class="badge">SCAMSHIELD / DEV TOOL</span>
+  <h1>OTP điện thoại &amp; đăng ký partner</h1>
+  <p class="intro">Gửi SMS và xác thực OTP điện thoại trước, sau đó gửi hồ sơ kèm token xác nhận.</p>
+  <div class="grid">
+    <section>
+      <h2>1. Kết nối Firebase</h2>
+      <form id="config-form">
+        <label for="config">Firebase Web config (JSON)</label>
+        <textarea id="config" rows="9" required spellcheck="false" placeholder='{"apiKey":"…","authDomain":"your-project.firebaseapp.com","projectId":"your-project","appId":"…"}'></textarea>
+        <p class="hint">Lấy tại Firebase Console → Project settings → Your apps → Web. Dán đối tượng JSON với tên field trong dấu ngoặc kép.</p>
+        <button id="connect" type="submit">Khởi tạo reCAPTCHA</button>
+      </form>
+      <p class="hint">Backend cần đặt <code>FIREBASE_WEB_API_KEY</code> của cùng project trong <code>.env</code> và khởi động lại.</p>
+      <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">Mở Firebase Console ↗</a>
+    </section>
+    <section>
+      <h2>2. Gửi &amp; xác thực OTP</h2>
+      <label for="email">Email đăng ký (không cần OTP email)</label>
+      <input id="email" type="email" autocomplete="email" placeholder="partner@gmail.com" maxlength="254" required>
+      <form id="send-form">
+        <label for="phone">Số điện thoại Việt Nam</label>
+        <input id="phone" type="tel" autocomplete="tel" placeholder="0912345678 hoặc +84912345678" maxlength="30" required>
+        <div id="captcha"></div>
+        <button id="send" type="submit" disabled>Gửi OTP qua backend</button>
+      </form>
+      <hr>
+      <form id="verify-form">
+        <label for="otp">Mã OTP SMS</label>
+        <input id="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6 chữ số" required>
+        <button id="verify" type="submit" disabled>Xác thực điện thoại</button>
+      </form>
+      <p class="hint">Thời hạn OTP do backend cấu hình. Sau khi xác thực, thời gian còn lại của token hiển thị bên dưới. Đổi số điện thoại cần xác thực lại.</p>
+    </section>
+  </div>
+  <div class="notice" id="domain-note">Để gửi SMS thật: bật Phone Authentication, cấu hình billing/Blaze và thêm domain HTTPS của trang vào Authorized domains. Có thể dùng số giả lập và mã cố định cấu hình trong Firebase để thử mà không gửi SMS.</div>
+  <section>
+    <h2>3. Hồ sơ partner</h2>
+    <p id="form-gate" class="hint">Xác thực OTP điện thoại trước khi gửi hồ sơ.</p>
+    <form id="partner-form">
+      <fieldset id="partner-fields" disabled style="border:0;padding:0;margin:0;min-width:0">
+        <div class="grid">
+          <div><label for="legal-name">Tên doanh nghiệp</label><input id="legal-name" maxlength="255" required></div>
+          <div><label for="tax-code">Mã số thuế</label><input id="tax-code" pattern="[0-9]{10}(-?[0-9]{3})?" required></div>
+          <div><label for="password">Mật khẩu tài khoản</label><input id="password" type="password" autocomplete="new-password" minlength="6" maxlength="72" required></div>
+          <div><label for="representative">Họ tên &amp; chức vụ đại diện</label><input id="representative" maxlength="255" required></div>
+        </div>
+        <label for="domains">Tên miền chính thống</label><input id="domains" placeholder="example.com.vn, app.example.com.vn" required>
+        <div class="grid">
+          <div><label for="hotlines">Hotline</label><input id="hotlines" placeholder="1900545413" required></div>
+          <div><label for="brands">SMS Brandname</label><input id="brands" placeholder="EXAMPLE" required></div>
+        </div>
+        <p class="hint">Nếu có nhiều domain/hotline/brandname, phân tách bằng dấu phẩy.</p>
+        <label for="licenses">Giấy phép doanh nghiệp</label><input id="licenses" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple required>
+        <label for="ownership">Chứng minh quyền sở hữu</label><input id="ownership" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple required>
+        <label><input id="legal-representative" type="checkbox" checked style="width:auto"> Tôi là đại diện pháp luật</label>
+        <label for="authorization">Giấy ủy quyền (bắt buộc nếu không phải đại diện pháp luật)</label><input id="authorization" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple>
+        <label><input id="terms" type="checkbox" required style="width:auto"> Cam kết thông tin chính xác và thuộc quyền sở hữu hợp pháp</label>
+        <button id="submit-partner" type="submit">Gửi hồ sơ đăng ký partner</button>
+      </fieldset>
+    </form>
+  </section>
+  <section class="output" aria-live="polite">
+    <div id="status" class="status">Chưa kết nối Firebase</div>
+    <pre id="result">Dán Firebase config để bắt đầu. Không có API key được lưu sẵn trong trang.</pre>
+  </section>
+</main>
+</body>
+</html>

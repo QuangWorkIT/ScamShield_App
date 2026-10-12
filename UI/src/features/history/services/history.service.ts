@@ -1,0 +1,96 @@
+import { HistoryItem } from "../types/history.types"
+
+export const MOCK_HISTORY_ITEMS: HistoryItem[] = [
+  {
+    id: "1",
+    timestamp: "12/05/2025 • 14:28:11",
+    ip: "14.161.***.*** (Viettel HN)",
+    isRetroactive: true,
+    targetType: "PHONE",
+    targetValue: "+84 912.443.882",
+    snippet:
+      '"Thông báo thuê bao sẽ bị khóa chiều sau 2 giờ do vi phạm quy định viễn thông..."',
+    category: "Giả Mạo Viễn Thông",
+    verdictLabel: "Lừa Đảo Nguy Cơ Cao",
+    verdictStatus: "DANGEROUS",
+    riskScore: 98,
+  },
+  {
+    id: "2",
+    timestamp: "16/05/2025 • 09:14:02",
+    ip: "27.72.***.*** (FPT HCM)",
+    targetType: "URL",
+    targetValue: "https://dichvucong-vneid-capnhat.gov-vn.info/apl...",
+    snippet:
+      'Link yêu cầu tải file APK "Dịch vụ công Bộ Công An v2.8" giả mạo đánh cắp mã OTP.',
+    category: "Giả Mạo VNeID / Malware",
+    verdictLabel: "Lừa Đảo Nguy Cơ Cao",
+    verdictStatus: "DANGEROUS",
+    riskScore: 99,
+  },
+  {
+    id: "3",
+    timestamp: "15/05/2025 • 18:40:55",
+    ip: "118.69.***.*** (Viettel HCM)",
+    targetType: "SMS_BANK",
+    targetValue: "SMS Brandname: Vietcombank",
+    snippet:
+      '"VCB Digibank: QK dang thuc hien giao dich 2,500,000 VND tai he thong POS..."',
+    category: "SMS Ngân Hàng Hợp Pháp",
+    verdictLabel: "An Toàn Chính Hãng",
+    verdictStatus: "SAFE",
+    riskScore: 3,
+  },
+  {
+    id: "4",
+    timestamp: "14/05/2025 • 21:05:18",
+    ip: "113.190.***.*** (VNPT ĐN)",
+    targetType: "TELEGRAM",
+    targetValue: "Zalo/Telegram: @TuyenDungShopeeMall_HR",
+    snippet:
+      '"Việc nhẹ làm tại nhà 400k-800k/ngày, duyệt đơn hàng nhận hoa hồng ngay lập tức..."',
+    category: "Tuyển Dụng CTV Ảo",
+    verdictLabel: "Nghi Vấn Rủi Ro",
+    verdictStatus: "SUSPICIOUS",
+    riskScore: 68,
+  },
+  {
+    id: "5",
+    timestamp: "13/05/2025 • 11:22:40",
+    ip: "14.238.***.*** (Viettel HP)",
+    targetType: "BANK_ACCOUNT",
+    targetValue: "STK: 104889201992 - VPBank (VU HOANG ANH)",
+    snippet:
+      "Tài khoản cá nhân giao dịch mua bán đồ gia dụng online trên hội nhóm mạng xã hội.",
+    category: "Giao Dịch Dân Sự",
+    verdictLabel: "Chưa Đủ Dữ Liệu",
+    verdictStatus: "UNKNOWN",
+    riskScore: 15,
+  },
+  {
+    id: "6",
+    timestamp: "11/05/2025 • 08:35:12",
+    ip: "14.161.***.*** (Viettel HN)",
+    targetType: "TRAFFIC_FINE",
+    targetValue: "http://tra-cuu-phatnguoi-c08.top/bienban",
+    snippet:
+      '"Cục Cảnh sát giao thông thông báo phương tiện 29A-883.xx có biên bản phạt nguội..."',
+    category: "Giả Mạo Cảnh Sát Giao Thông",
+    verdictLabel: "Lừa Đảo Nguy Cơ Cao",
+    verdictStatus: "DANGEROUS",
+    riskScore: 97,
+  },
+  {
+    id: "7",
+    timestamp: "09/05/2025 • 16:50:33",
+    ip: "171.244.***.*** (Viettel ĐN)",
+    targetType: "CRYPTO",
+    targetValue: "https://binance-vip-asia-trade.cc",
+    snippet:
+      '"Nạp USDT cam kết lợi nhuận 3.5%/ngày, bảo hiểm vốn 100% bởi quỹ ủy thác..."',
+    category: "Sàn Forex / Tiền Ảo",
+    verdictLabel: "Lừa Đảo Nguy Cơ Cao",
+    verdictStatus: "DANGEROUS",
+    riskScore: 99,
+  },
+]

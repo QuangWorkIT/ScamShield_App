@@ -1,3 +1,3 @@
-export default function UserHomePage() {
-  return <div>This is registerd user home page</div>
-}
+// Both "/user" and "/user/check" point to the scam check page
+export { default } from "./check/page"
+

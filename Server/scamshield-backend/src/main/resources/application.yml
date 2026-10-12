@@ -1,13 +1,21 @@
 spring:
+  profiles:
+    default: dev
   application:
     name: scamshield-backend
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 80MB
 
-  # Database Configuration (PostgreSQL)
+  # Database Configuration (PostgreSQL / Supabase)
   datasource:
-    url: jdbc:postgresql://localhost:5432/scamshield-db
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/scamshield-db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-init-sql: SET TIME ZONE 'Asia/Ho_Chi_Minh'
 
   # JPA/Hibernate
   jpa:
@@ -19,6 +27,52 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  # Mail Configuration
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+    display-name: ${MAIL_DISPLAY_NAME:ScamShield}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 # Server Port
 server:
   port: 8080
+
+# Firebase Phone Authentication (SMS requires Blaze/billing in Firebase).
+firebase:
+  phone:
+    api-key: ${FIREBASE_WEB_API_KEY:}
+    max-requests-per24-hours: ${SMS_OTP_MAX_REQUESTS_PER_24_HOURS:10}
+
+# Application Configurations
+app:
+  supabase:
+    storage:
+      region: ${SUPABASE_STORAGE_REGION:${AWS_REGION:ap-south-1}}
+      access-key-id: ${SUPABASE_STORAGE_ACCESS_KEY:${AWS_ACCESS_KEY_ID:}}
+      secret-access-key: ${SUPABASE_STORAGE_SECRET_KEY:${AWS_SECRET_ACCESS_KEY:}}
+      bucket-name: ${SUPABASE_STORAGE_BUCKET_NAME:${AWS_S3_BUCKET_NAME:evidences}}
+      endpoint-override: ${SUPABASE_STORAGE_ENDPOINT:${AWS_S3_ENDPOINT_OVERRIDE:}}
+  aws:
+    s3:
+      region: ${app.supabase.storage.region}
+      access-key-id: ${app.supabase.storage.access-key-id}
+      secret-access-key: ${app.supabase.storage.secret-access-key}
+      bucket-name: ${app.supabase.storage.bucket-name}
+      endpoint-override: ${app.supabase.storage.endpoint-override}
+  otp:
+    email-expiration-ms: ${EMAIL_OTP_EXPIRATION_MS:300000}
+    phone-expiration-ms: ${PHONE_OTP_EXPIRATION_MS:300000}
+  contact-verification:
+    expiration-ms: ${CONTACT_VERIFICATION_EXPIRATION_MS:600000}
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS}
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}

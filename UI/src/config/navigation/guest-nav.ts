@@ -16,7 +16,7 @@ export const GUEST_NAV_ITEMS: NavItem[] = [
   },
   {
     title: "Xu hướng lừa đảo",
-    href: "/guest/alerts",
+    href: "/guest/dashboard",
   },
   {
     title: "Cẩm nang an toàn",
