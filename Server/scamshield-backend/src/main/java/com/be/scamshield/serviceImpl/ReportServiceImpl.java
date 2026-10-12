@@ -11,6 +11,7 @@ import com.be.scamshield.entity.Report;
 import com.be.scamshield.entity.ReportEvidence;
 import com.be.scamshield.entity.ScamCategorie;
 import com.be.scamshield.entity.User;
+import com.be.scamshield.exception.UnauthorizedException;
 import com.be.scamshield.repository.IndicatorRepository;
 import com.be.scamshield.repository.ReportEvidenceRepository;
 import com.be.scamshield.repository.ReportRepository;
@@ -238,16 +239,11 @@ public class ReportServiceImpl implements IReportService {
     }
 
     private User resolveReporterUser(UserPrincipal currentUser) {
-        if (currentUser != null && currentUser.getId() != null) {
-            return userRepository.findById(currentUser.getId())
-                    .orElseGet(this::getFallbackUser);
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new UnauthorizedException("Vui lòng đăng nhập để thực hiện chức năng này.");
         }
-        return getFallbackUser();
-    }
-
-    private User getFallbackUser() {
-        return userRepository.findAll().stream().findFirst()
-                .orElseThrow(() -> new RuntimeException("Chưa có tài khoản người dùng trong hệ thống để ghi nhận báo cáo."));
+        return userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new UnauthorizedException("Không tìm thấy thông tin tài khoản người dùng đăng nhập."));
     }
 
     private String getEvidenceType(String filename) {

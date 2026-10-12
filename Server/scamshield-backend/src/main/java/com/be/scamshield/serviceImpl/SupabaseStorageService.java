@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
+import java.net.URI;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
@@ -179,7 +180,8 @@ public class SupabaseStorageService {
             s3Client.deleteObject(deleteRequest);
             log.info("Deleted object from Supabase Storage: {}", objectKey);
         } catch (Exception e) {
-            log.warn("Failed to delete file from Supabase Storage [key={}]: {}", objectKey, e.getMessage());
+            log.error("Failed to delete file from Supabase Storage [key={}]: {}", objectKey, e.getMessage(), e);
+            throw new RuntimeException("Failed to delete file from Supabase Storage: " + e.getMessage(), e);
         }
     }
 
@@ -229,8 +231,8 @@ public class SupabaseStorageService {
         if (!StringUtils.hasText(override)) {
             throw new IllegalStateException("Supabase Storage endpoint is not configured!");
         }
-        if (override.contains("supabase.co")) {
-            String baseUrl = override.replaceAll("/storage/v1/s3/?$", "");
+        if (override.contains("supabase.co") || override.contains("/storage/v1/s3")) {
+            String baseUrl = override.replaceAll("/storage/v1/s3/?$", "").replaceAll("/+$", "");
             return String.format("%s/storage/v1/object/public/%s/%s", baseUrl, getBucketName(), objectKey);
         }
         return String.format("%s/%s/%s", override, getBucketName(), objectKey);
@@ -257,7 +259,7 @@ public class SupabaseStorageService {
         return S3Client.builder()
                 .region(Region.of(getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .endpointOverride(java.net.URI.create(override))
+                .endpointOverride(URI.create(override))
                 .forcePathStyle(true)
                 .build();
     }
@@ -272,7 +274,7 @@ public class SupabaseStorageService {
         return S3Presigner.builder()
                 .region(Region.of(getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .endpointOverride(java.net.URI.create(override))
+                .endpointOverride(URI.create(override))
                 .build();
     }
 
