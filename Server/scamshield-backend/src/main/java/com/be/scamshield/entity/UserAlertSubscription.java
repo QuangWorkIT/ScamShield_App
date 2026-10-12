@@ -22,7 +22,7 @@ public class UserAlertSubscription {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
-    private ScamCategorie category;
+    private ScamCategory category;
 
     @Column(name = "region_code")
     private String regionCode;
