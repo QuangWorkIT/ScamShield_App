@@ -4,11 +4,8 @@ import com.be.scamshield.constant.ScamDashboardPeriod;
 import com.be.scamshield.dto.request.ScamDashboardFilterRequest;
 import com.be.scamshield.dto.response.ScamDashboardSummaryResponse.ConfirmedCategory;
 import com.be.scamshield.dto.response.ScamDashboardSummaryResponse.Hotspot;
-import com.be.scamshield.entity.ConfirmedIndicator;
-import com.be.scamshield.entity.Indicator;
-import com.be.scamshield.entity.Report;
-import com.be.scamshield.entity.ScamCategorie;
-import com.be.scamshield.entity.User;
+import com.be.scamshield.entity.*;
+import com.be.scamshield.entity.ScamCategory;
 import com.be.scamshield.service.IScamDashboardService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,8 +49,8 @@ class ScamDashboardPersistenceTest {
     @MockitoBean
     private Clock clock;
     private User reporter;
-    private ScamCategorie jobs;
-    private ScamCategorie prize;
+    private ScamCategory jobs;
+    private ScamCategory prize;
     private Indicator activeUrl;
 
     @BeforeEach
@@ -236,8 +233,8 @@ class ScamDashboardPersistenceTest {
                 .andExpect(jsonPath("$.paths['/api/dashboard/summary'].get.parameters[?(@.name == 'period')].schema.enum[0]").value("TODAY"));
     }
 
-    private ScamCategorie category(String code, String name, boolean active) {
-        ScamCategorie category = ScamCategorie.builder().code(code).name(name).version(1).isActive(active)
+    private ScamCategory category(String code, String name, boolean active) {
+        ScamCategory category = ScamCategory.builder().code(code).name(name).version(1).isActive(active)
                 .createdAt(NOW).updatedAt(NOW).build();
         entityManager.persist(category);
         return category;
@@ -249,12 +246,12 @@ class ScamDashboardPersistenceTest {
         return indicator;
     }
 
-    private void confirm(Indicator indicator, ScamCategorie category, String status, LocalDateTime confirmedAt, LocalDateTime retractedAt) {
+    private void confirm(Indicator indicator, ScamCategory category, String status, LocalDateTime confirmedAt, LocalDateTime retractedAt) {
         entityManager.persist(ConfirmedIndicator.builder().indicator(indicator).category(category).status(status)
                 .confirmedByUser(reporter).confirmedAt(confirmedAt).retractedAt(retractedAt).build());
     }
 
-    private void report(Indicator indicator, ScamCategorie category, String regionCode, String createdAt) {
+    private void report(Indicator indicator, ScamCategory category, String regionCode, String createdAt) {
         entityManager.persist(Report.builder().reporterUser(reporter).indicator(indicator).status("PENDING")
                 .category(category).regionCode(regionCode).reportCountSignal(1).coordinatedReportSuspected(false)
                 .moderationLocked(false).createdAt(LocalDateTime.parse(createdAt)).updatedAt(NOW).build());

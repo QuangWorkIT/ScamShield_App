@@ -9,7 +9,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class WhitelistEntrie {
+public class WhitelistEntry {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

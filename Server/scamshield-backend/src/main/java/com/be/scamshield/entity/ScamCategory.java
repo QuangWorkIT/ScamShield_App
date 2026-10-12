@@ -9,7 +9,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ScamCategorie {
+public class ScamCategory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

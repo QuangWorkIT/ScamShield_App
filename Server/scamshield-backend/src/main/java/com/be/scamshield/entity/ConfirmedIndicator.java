@@ -22,7 +22,7 @@ public class ConfirmedIndicator {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
-    private ScamCategorie category;
+    private ScamCategory category;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "impersonated_partner_id")

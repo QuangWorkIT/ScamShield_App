@@ -19,7 +19,7 @@ INSERT INTO reputation_ranks (name, min_points, max_points, description) VALUES
 INSERT INTO scam_categories (code, name, description, version, is_active, created_at, updated_at) VALUES
 ('VIEC_LAM', 'Lừa đảo việc làm, CTV', 'Tuyển CTV làm nhiệm vụ ảo, chốt đơn hàng', 1, true, NOW(), NOW()),
 ('TRUNG_THUONG', 'Lừa đảo trúng thưởng', 'Yêu cầu nộp phí nhận quà', 1, true, NOW(), NOW()),
-('GIA_DANH_CQCN', 'Giả danh cơ quan nhà nước', 'Giả công an, tòa án dọa bắt giam', 1, true, NOW(), NOW());
+('GIA_DANH_CQCN', 'Giả danh cơ quan chức năng', 'Giả công an, tòa án dọa bắt giam', 1, true, NOW(), NOW());
 
 -- 4. users
 -- LƯU Ý: Mật khẩu của tất cả user dưới đây đều là: 123456 (đã được băm bằng BCrypt)
@@ -126,9 +126,75 @@ INSERT INTO partner_official_alerts (partner_id, submission_type, title, descrip
 INSERT INTO warning_cards (created_by_user_id, check_verdict_id, created_at) VALUES
 ((SELECT id FROM users WHERE email='admin@scamshield.vn'), 1, NOW()); 
 
--- 29. education_articles
-INSERT INTO education_articles (title, slug, content, status, created_at, updated_at) VALUES
-('Cách nhận biết lừa đảo qua điện thoại', 'cach-nhan-biet-lua-dao-dien-thoai', 'Đừng vội tin người xưng là công an...', 'PUBLISHED', NOW(), NOW());
+-- 29. Education Hub: 4 ca giải phẫu và 3 thẻ gia đình theo giao diện mẫu.
+-- Chạy API trước để Hibernate bổ sung các cột mới. Nếu đã có dữ liệu cơ bản, chỉ chạy mục 29.
+-- Mục này chỉ INSERT, có kiểm tra tồn tại để chạy lại không thêm trùng.
+-- image_url/pdf_url để NULL vì chưa có file ảnh/PDF thực tế, không tạo URL tải giả.
+INSERT INTO scam_categories (code, name, description, version, is_active, created_at, updated_at)
+SELECT v.code, v.name, v.description, 1, true,
+       CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'
+FROM (VALUES
+    ('GIA_DANH_NGAN_HANG', 'Mạo danh ngân hàng', 'Giả danh ngân hàng qua SMS Brandname và đường dẫn giả'),
+    ('DANH_CAP_OTP', 'Đánh cắp mã OTP', 'Lừa cung cấp mã xác thực OTP và mã PIN'),
+    ('VE_MAY_BAY_DU_LICH', 'Vé máy bay & Du lịch', 'Giả hoàn vé, hủy chuyến và đền bù qua liên kết độc hại')
+) AS v(code, name, description)
+WHERE NOT EXISTS (SELECT 1 FROM scam_categories c WHERE c.code = v.code);
+
+-- jsonb_populate_record lấy đúng các cột của bảng hiện tại.
+-- Khóa content rỗng chỉ để tương thích database cũ còn cột content NOT NULL.
+-- Bảng mới không có cột content thì PostgreSQL bỏ qua khóa đó; entity/API không sử dụng content.
+INSERT INTO education_articles
+SELECT populated.*
+FROM (VALUES
+    ('SMS Brandname trạm phát BTS', 'sms-brandname-tram-phat-bts', 'SCENARIO',
+     'Phát sóng giả mạo chèn thẳng tin nhắn lừa đảo vào luồng tin cậy ngân hàng.', 'GIA_DANH_NGAN_HANG', 'GIẢ MẠO BRANDNAME', 'Cực đại',
+     '{"example":{"channelType":"SMS","senderName":"VCB Digibank","displayTime":"14:32","message":"Tai khoan bi khoa sau 30 phut. Xac minh ngay tai: portal-vcb-digibanks[.]vn de huy.","highlightedText":"portal-vcb-digibanks[.]vn"},"recognitionSigns":["Tên miền giả kèm áp lực thời gian."],"scammerGoal":"Chiếm đoạt mật khẩu và mã OTP.","recommendedActions":["Không bấm link. Mở thẳng App gốc."]}'::jsonb,
+     NULL::text, NULL::integer, NULL::integer, 1),
+    ('Video Zalo giả Cảnh sát điều tra', 'video-zalo-gia-canh-sat-dieu-tra', 'SCENARIO',
+     'Dùng Deepfake khuôn mặt cán bộ trong phòng hỏi cung để hăm dọa chuyển tiền.', 'GIA_DANH_CQCN', 'DEEPFAKE - GIẢ DANH CƠ QUAN', 'Nguy cấp',
+     '{"example":{"channelType":"VIDEO","senderName":"Zalo Video: CQ Điều tra","displayTime":"00:43","message":"Chị liên quan đường dây rửa tiền. Khóa cửa phòng, chuyển số dư vào tài khoản thanh tra ngay."},"recognitionSigns":["Mặt mờ giật, ép bảo mật tuyệt đối."],"scammerGoal":"Thao túng nỗi sợ để tự chuyển tiền.","recommendedActions":["Cúp máy. Công an không làm việc qua mạng."]}'::jsonb,
+     NULL::text, NULL::integer, NULL::integer, 2),
+    ('Tuyển CTV đơn hàng hoa hồng 10–20%', 'tuyen-ctv-don-hang-hoa-hong', 'SCENARIO',
+     'Nạp tiền chốt đơn nhận lãi nhỏ ban đầu trước khi giữ khoản tiền lớn.', 'VIEC_LAM', 'CỘNG TÁC VIÊN ẢO', 'Phổ biến',
+     '{"example":{"channelType":"CHAT","senderName":"Telegram CSKH","displayTime":"10:15","message":"Nhiệm vụ cuối: Nạp 15.000.000đ để nhận về 19.500.000đ. Ưu đãi giữ trong 10 phút!"},"recognitionSigns":["Hoa hồng bất thường, nhóm kín Telegram."],"scammerGoal":"Chiếm đoạt toàn bộ tiền nạp tích lũy.","recommendedActions":["Chặn liên lạc. Sàn TMĐT không tuyển nạp tiền."]}'::jsonb,
+     NULL::text, NULL::integer, NULL::integer, 3),
+    ('Cuộc gọi hoàn vé & hủy chuyến khẩn', 'cuoc-goi-hoan-ve-huy-chuyen-khan', 'SCENARIO',
+     'Gọi thông báo hủy chuyến bay rồi gửi link nhận bồi thường chứa mã độc.', 'VE_MAY_BAY_DU_LICH', 'VÉ MÁY BAY & DU LỊCH', 'Tăng vọt',
+     '{"example":{"channelType":"CALL","senderName":"Tổng đài Hãng không","displayTime":"18:40","message":"Chuyến bay bị hoãn, nhận đền bù 800.000đ qua link xác thực gửi kèm Zalo."},"recognitionSigns":["Yêu cầu cài tệp lạ hoặc truy cập link lạ."],"scammerGoal":"Đánh cắp OTP hoặc chiếm quyền điện thoại.","recommendedActions":["Chỉ tra cứu qua ứng dụng chính hãng."]}'::jsonb,
+     NULL::text, NULL::integer, NULL::integer, 4),
+    ('Quy tắc vàng 3 KHÔNG', 'quy-tac-vang-3-khong', 'POCKET_CARD',
+     'Nguyên tắc cốt lõi trước mọi cuộc gọi và tin nhắn lạ.', NULL, 'THẺ #01', NULL,
+     '{"tips":["1. KHÔNG hoảng sợ, hối thúc","2. KHÔNG bấm link lạ","3. KHÔNG chuyển tiền"]}'::jsonb,
+     'Khổ thẻ A6', 1200, 800, 1),
+    ('Bảo vệ người cao tuổi', 'bao-ve-nguoi-cao-tuoi', 'POCKET_CARD',
+     'Nhận diện khi có số lạ xưng công an hù dọa.', 'GIA_DANH_CQCN', 'THẺ #02', NULL,
+     '{"tips":["Công an chỉ gửi giấy mời trực tiếp.","Không có tài khoản tạm giữ cá nhân.","Cúp máy, gọi ngay đường dây 069.234.3640."]}'::jsonb,
+     'Khổ in dán tường · Khổ dọc', NULL::integer, NULL::integer, 2),
+    ('An toàn OTP & Mã PIN', 'an-toan-otp-ma-pin', 'POCKET_CARD',
+     'Tấm khiên bảo vệ tài khoản ngân hàng và ví số.', 'DANH_CAP_OTP', 'THẺ #03', NULL,
+     '{"tips":["Ngân hàng không bao giờ hỏi OTP.","Luôn đọc kỹ nội dung SMS giao dịch.","Không cấp quyền Trợ năng (Accessibility)."]}'::jsonb,
+     'Hình nền điện thoại', 1080, 1920, 3)
+) AS v(title, slug, content_type, summary, category_code, tag, badge_label, structured_content, format_label, image_width, image_height, display_order)
+JOIN users u ON u.email = 'admin@scamshield.vn'
+LEFT JOIN scam_categories c ON c.code = v.category_code
+CROSS JOIN LATERAL jsonb_populate_record(NULL::education_articles, jsonb_build_object(
+    'id', nextval(pg_get_serial_sequence('education_articles', 'id')),
+    'title', v.title, 'slug', v.slug, 'content', '', 'content_type', v.content_type,
+    'summary', v.summary, 'structured_content', v.structured_content, 'category_id', c.id,
+    'tag', v.tag, 'badge_label', v.badge_label, 'image_url', NULL, 'pdf_url', NULL,
+    'format_label', v.format_label, 'image_width', v.image_width, 'image_height', v.image_height,
+    'display_order', v.display_order, 'status', 'PUBLISHED', 'created_by', u.id,
+    'published_at', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '1 minute',
+    'created_at', (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '1 minute',
+    'updated_at', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'
+)) AS populated
+WHERE NOT EXISTS (SELECT 1 FROM education_articles a WHERE a.slug = v.slug);
+
+-- GET /api/education-hub: 4 scenarios và 3 pocketCards khi chỉ có các bản ghi mẫu này.
+-- GET /api/education-hub/contents?contentType=SCENARIO&categoryCode=GIA_DANH_NGAN_HANG
+-- GET /api/education-hub/contents?contentType=POCKET_CARD&sort=DISPLAY_ORDER
+-- GET /api/education-hub/contents/sms-brandname-tram-phat-bts
+-- GET /api/education-hub/filters
 
 
 -- 33. official_scam_warnings
