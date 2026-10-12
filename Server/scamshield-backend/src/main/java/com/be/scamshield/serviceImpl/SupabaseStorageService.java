@@ -12,6 +12,7 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
@@ -49,12 +50,14 @@ public class SupabaseStorageService {
             log.info("Supabase Storage successfully configured: bucket={}, endpoint={}, region={}", 
                     getBucketName(), getEndpointOverride(), getRegion());
         } else {
-            log.warn("Supabase Storage credentials NOT detected. Please check SUPABASE_STORAGE_ACCESS_KEY / AWS_ACCESS_KEY_ID and SUPABASE_STORAGE_SECRET_KEY / AWS_SECRET_ACCESS_KEY in .env");
+            log.warn("Supabase Storage credentials NOT detected. Please check SUPABASE_STORAGE_ACCESS_KEY / AWS_ACCESS_KEY_ID, SUPABASE_STORAGE_SECRET_KEY / AWS_SECRET_ACCESS_KEY, and SUPABASE_STORAGE_ENDPOINT / AWS_S3_ENDPOINT_OVERRIDE in .env");
         }
     }
 
     public boolean isStorageConfigured() {
-        return StringUtils.hasText(getAccessKeyId()) && StringUtils.hasText(getSecretAccessKey());
+        return StringUtils.hasText(getAccessKeyId()) 
+                && StringUtils.hasText(getSecretAccessKey()) 
+                && StringUtils.hasText(getEndpointOverride());
     }
 
     public boolean isAwsConfigured() {
@@ -142,14 +145,16 @@ public class SupabaseStorageService {
                 throw new IllegalArgumentException("Supabase Storage credentials are not configured. Please set SUPABASE_STORAGE_ACCESS_KEY / AWS_ACCESS_KEY_ID, SUPABASE_STORAGE_SECRET_KEY, and SUPABASE_STORAGE_ENDPOINT in .env!");
             }
 
-            S3Client s3Client = createS3Client();
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(getBucketName())
-                    .key(objectKey)
-                    .contentType(file.getContentType())
-                    .build();
+            try (S3Client s3Client = createS3Client()) {
+                PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                        .bucket(getBucketName())
+                        .key(objectKey)
+                        .contentType(file.getContentType())
+                        .build();
 
-            s3Client.putObject(putObjectRequest, RequestBody.fromBytes(bytes));
+                s3Client.putObject(putObjectRequest, RequestBody.fromBytes(bytes));
+            }
+
             String fileUrl = buildPublicUrl(objectKey);
             log.info("File uploaded successfully to Supabase Storage: {}", fileUrl);
 
@@ -159,6 +164,22 @@ public class SupabaseStorageService {
         } catch (Exception e) {
             log.error("Failed to upload file to Supabase Storage: {}", e.getMessage(), e);
             throw new IllegalArgumentException("Failed to upload file to Supabase Storage: " + e.getMessage(), e);
+        }
+    }
+
+    public void deleteFile(String objectKey) {
+        if (!isStorageConfigured() || !StringUtils.hasText(objectKey)) {
+            return;
+        }
+        try (S3Client s3Client = createS3Client()) {
+            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                    .bucket(getBucketName())
+                    .key(objectKey)
+                    .build();
+            s3Client.deleteObject(deleteRequest);
+            log.info("Deleted object from Supabase Storage: {}", objectKey);
+        } catch (Exception e) {
+            log.warn("Failed to delete file from Supabase Storage [key={}]: {}", objectKey, e.getMessage());
         }
     }
 
@@ -205,14 +226,14 @@ public class SupabaseStorageService {
 
     public String buildPublicUrl(String objectKey) {
         String override = getEndpointOverride();
-        if (StringUtils.hasText(override)) {
-            if (override.contains("supabase.co")) {
-                String baseUrl = override.replaceAll("/storage/v1/s3/?$", "");
-                return String.format("%s/storage/v1/object/public/%s/%s", baseUrl, getBucketName(), objectKey);
-            }
-            return String.format("%s/%s/%s", override, getBucketName(), objectKey);
+        if (!StringUtils.hasText(override)) {
+            throw new IllegalStateException("Supabase Storage endpoint is not configured!");
         }
-        return String.format("https://%s.storage.supabase.co/storage/v1/object/public/%s/%s", getEndpointOverride(), getBucketName(), objectKey);
+        if (override.contains("supabase.co")) {
+            String baseUrl = override.replaceAll("/storage/v1/s3/?$", "");
+            return String.format("%s/storage/v1/object/public/%s/%s", baseUrl, getBucketName(), objectKey);
+        }
+        return String.format("%s/%s/%s", override, getBucketName(), objectKey);
     }
 
     public String calculateHash(byte[] fileBytes) {
@@ -227,30 +248,32 @@ public class SupabaseStorageService {
     }
 
     private S3Client createS3Client() {
-        AwsBasicCredentials credentials = AwsBasicCredentials.create(getAccessKeyId(), getSecretAccessKey());
-        var builder = S3Client.builder()
-                .region(Region.of(getRegion()))
-                .credentialsProvider(StaticCredentialsProvider.create(credentials));
-
         String override = getEndpointOverride();
-        if (StringUtils.hasText(override)) {
-            builder.endpointOverride(java.net.URI.create(override))
-                   .forcePathStyle(true);
+        if (!StringUtils.hasText(override)) {
+            throw new IllegalStateException("Supabase Storage endpoint is not configured!");
         }
-        return builder.build();
+
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(getAccessKeyId(), getSecretAccessKey());
+        return S3Client.builder()
+                .region(Region.of(getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .endpointOverride(java.net.URI.create(override))
+                .forcePathStyle(true)
+                .build();
     }
 
     private S3Presigner createS3Presigner() {
-        AwsBasicCredentials credentials = AwsBasicCredentials.create(getAccessKeyId(), getSecretAccessKey());
-        var builder = S3Presigner.builder()
-                .region(Region.of(getRegion()))
-                .credentialsProvider(StaticCredentialsProvider.create(credentials));
-
         String override = getEndpointOverride();
-        if (StringUtils.hasText(override)) {
-            builder.endpointOverride(java.net.URI.create(override));
+        if (!StringUtils.hasText(override)) {
+            throw new IllegalStateException("Supabase Storage endpoint is not configured!");
         }
-        return builder.build();
+
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(getAccessKeyId(), getSecretAccessKey());
+        return S3Presigner.builder()
+                .region(Region.of(getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .endpointOverride(java.net.URI.create(override))
+                .build();
     }
 
     public record UploadResult(String fileUrl, String fileHash, String objectKey, String originalFilename) {}

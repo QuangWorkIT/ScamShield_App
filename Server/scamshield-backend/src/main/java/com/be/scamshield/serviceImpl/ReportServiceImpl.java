@@ -22,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -88,21 +90,54 @@ public class ReportServiceImpl implements IReportService {
 
         // 5. Process Evidence Attachments (Direct Multipart Files Uploaded to Supabase Storage)
         List<ReportEvidence> evidenceList = new ArrayList<>();
-        if (files != null && !files.isEmpty()) {
-            for (MultipartFile file : files) {
-                if (!file.isEmpty()) {
-                    SupabaseStorageService.UploadResult uploadResult = supabaseStorageService.uploadFile(file, "evidences");
-                    ReportEvidence evidence = ReportEvidence.builder()
-                            .report(savedReport)
-                            .evidenceType(getEvidenceType(file.getOriginalFilename()))
-                            .fileUrl(uploadResult.fileUrl())
-                            .fileHash(uploadResult.fileHash())
-                            .verificationStatus("PENDING")
-                            .createdAt(LocalDateTime.now())
-                            .build();
-                    evidenceList.add(reportEvidenceRepository.save(evidence));
+        List<String> uploadedKeys = new ArrayList<>();
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (status != TransactionSynchronization.STATUS_COMMITTED) {
+                        for (String key : uploadedKeys) {
+                            try {
+                                supabaseStorageService.deleteFile(key);
+                            } catch (Exception e) {
+                                log.warn("Failed to delete orphaned file on rollback [key={}]: {}", key, e.getMessage());
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        try {
+            if (files != null && !files.isEmpty()) {
+                for (MultipartFile file : files) {
+                    if (!file.isEmpty()) {
+                        SupabaseStorageService.UploadResult uploadResult = supabaseStorageService.uploadFile(file, "evidences");
+                        uploadedKeys.add(uploadResult.objectKey());
+                        ReportEvidence evidence = ReportEvidence.builder()
+                                .report(savedReport)
+                                .evidenceType(getEvidenceType(file.getOriginalFilename()))
+                                .fileUrl(uploadResult.fileUrl())
+                                .fileHash(uploadResult.fileHash())
+                                .verificationStatus("PENDING")
+                                .createdAt(LocalDateTime.now())
+                                .build();
+                        evidenceList.add(reportEvidenceRepository.save(evidence));
+                    }
                 }
             }
+        } catch (Exception e) {
+            if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+                for (String key : uploadedKeys) {
+                    try {
+                        supabaseStorageService.deleteFile(key);
+                    } catch (Exception ex) {
+                        log.warn("Failed to delete orphaned file on error [key={}]: {}", key, ex.getMessage());
+                    }
+                }
+            }
+            throw e;
         }
 
         // 6. Process Evidence Items (Pre-uploaded Supabase Storage URLs)
