@@ -71,11 +71,6 @@ public class SupabaseStorageService {
             String env = System.getenv(key);
             if (StringUtils.hasText(env)) return env.trim();
         }
-        com.be.scamshield.config.EnvLoader.loadEnv();
-        for (String key : new String[]{"SUPABASE_STORAGE_ACCESS_KEY", "AWS_ACCESS_KEY_ID"}) {
-            String reloaded = System.getProperty(key);
-            if (StringUtils.hasText(reloaded)) return reloaded.trim();
-        }
         return "";
     }
 
@@ -88,11 +83,6 @@ public class SupabaseStorageService {
             if (StringUtils.hasText(prop)) return prop.trim();
             String env = System.getenv(key);
             if (StringUtils.hasText(env)) return env.trim();
-        }
-        com.be.scamshield.config.EnvLoader.loadEnv();
-        for (String key : new String[]{"SUPABASE_STORAGE_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"}) {
-            String reloaded = System.getProperty(key);
-            if (StringUtils.hasText(reloaded)) return reloaded.trim();
         }
         return "";
     }
@@ -107,11 +97,6 @@ public class SupabaseStorageService {
             String env = System.getenv(key);
             if (StringUtils.hasText(env)) return env.trim();
         }
-        com.be.scamshield.config.EnvLoader.loadEnv();
-        for (String key : new String[]{"SUPABASE_STORAGE_ENDPOINT", "AWS_S3_ENDPOINT_OVERRIDE"}) {
-            String reloaded = System.getProperty(key);
-            if (StringUtils.hasText(reloaded)) return reloaded.trim();
-        }
         return "";
     }
 
@@ -125,11 +110,6 @@ public class SupabaseStorageService {
             String env = System.getenv(key);
             if (StringUtils.hasText(env)) return env.trim();
         }
-        com.be.scamshield.config.EnvLoader.loadEnv();
-        for (String key : new String[]{"SUPABASE_STORAGE_BUCKET_NAME", "AWS_S3_BUCKET_NAME"}) {
-            String reloaded = System.getProperty(key);
-            if (StringUtils.hasText(reloaded)) return reloaded.trim();
-        }
         return "evidences";
     }
 
@@ -142,11 +122,6 @@ public class SupabaseStorageService {
             if (StringUtils.hasText(prop)) return prop.trim();
             String env = System.getenv(key);
             if (StringUtils.hasText(env)) return env.trim();
-        }
-        com.be.scamshield.config.EnvLoader.loadEnv();
-        for (String key : new String[]{"SUPABASE_STORAGE_REGION", "AWS_REGION"}) {
-            String reloaded = System.getProperty(key);
-            if (StringUtils.hasText(reloaded)) return reloaded.trim();
         }
         return "ap-south-1";
     }
