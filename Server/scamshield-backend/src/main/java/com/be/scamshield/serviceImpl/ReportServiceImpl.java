@@ -9,7 +9,7 @@ import com.be.scamshield.dto.response.ReportResponse;
 import com.be.scamshield.entity.Indicator;
 import com.be.scamshield.entity.Report;
 import com.be.scamshield.entity.ReportEvidence;
-import com.be.scamshield.entity.ScamCategorie;
+import com.be.scamshield.entity.ScamCategory;
 import com.be.scamshield.entity.User;
 import com.be.scamshield.exception.UnauthorizedException;
 import com.be.scamshield.repository.IndicatorRepository;
@@ -66,7 +66,7 @@ public class ReportServiceImpl implements IReportService {
                 });
 
         // 2. Resolve Scam Category
-        ScamCategorie category = resolveCategory(request.getCategory());
+        ScamCategory category = resolveCategory(request.getCategory());
 
         // 3. Resolve Reporter User
         User reporterUser = resolveReporterUser(currentUser);
@@ -215,7 +215,7 @@ public class ReportServiceImpl implements IReportService {
         return identifier.replaceAll("\\s+", "").toLowerCase();
     }
 
-    private ScamCategorie resolveCategory(String categoryInput) {
+    private ScamCategory resolveCategory(String categoryInput) {
         if (!StringUtils.hasText(categoryInput)) {
             return getFallbackCategory();
         }
@@ -225,9 +225,9 @@ public class ReportServiceImpl implements IReportService {
                         .orElseGet(this::getFallbackCategory));
     }
 
-    private ScamCategorie getFallbackCategory() {
+    private ScamCategory getFallbackCategory() {
         return scamCategorieRepository.findAll().stream().findFirst()
-                .orElseGet(() -> scamCategorieRepository.save(ScamCategorie.builder()
+                .orElseGet(() -> scamCategorieRepository.save(ScamCategory.builder()
                         .code("OTHER")
                         .name("Lừa đảo khác")
                         .description("Các hình thức lừa đảo chưa phân loại")
