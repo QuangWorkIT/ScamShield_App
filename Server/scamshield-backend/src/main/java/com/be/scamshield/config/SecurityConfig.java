@@ -89,29 +89,12 @@ public class SecurityConfig {
                             .access((authentication, context) -> new AuthorizationDecision(testUiEnabled))
                         .requestMatchers(HttpMethod.POST, "/api/partners/registrations").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/dashboard/summary", "/api/dashboard/filters").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api/v1/scam-check/ping"
-                        ).permitAll()
-                        .requestMatchers(
-                                "/api/reports/my-reports",
-                                "/api/v1/reports/my-reports",
-                                "/api/reports/presigned-url",
-                                "/api/v1/reports/presigned-url"
-                        ).authenticated()
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/reports",
-                                "/api/reports/**",
-                                "/api/v1/reports",
-                                "/api/v1/reports/**"
-                        ).authenticated()
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/reports/{id:[0-9]+}",
-                                "/api/v1/reports/{id:[0-9]+}"
                         ).permitAll()
                         .anyRequest().authenticated()
                 );

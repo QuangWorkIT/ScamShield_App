@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +29,7 @@ public class ReportController {
 
     private final IReportService reportService;
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Nộp báo cáo lừa đảo kèm file ảnh (Direct Multipart Upload)", 
                description = "Nộp thông tin báo cáo lừa đảo kèm trực tiếp danh sách tệp ảnh bằng chứng. Tệp sẽ được băm SHA-256 và tự động tải lên Supabase Storage bucket.")
@@ -41,6 +43,7 @@ public class ReportController {
                 .body(new BaseResponse<>(true, "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)", response));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping(value = "/json", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Nộp báo cáo lừa đảo (Sử dụng URL ảnh đã tải lên Supabase Storage trước)", 
                description = "Nộp thông tin báo cáo với danh sách URL ảnh bằng chứng đã upload lên Supabase Storage bằng Presigned URL.")
@@ -53,6 +56,7 @@ public class ReportController {
                 .body(new BaseResponse<>(true, "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)", response));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/presigned-url")
     @Operation(summary = "Xin Supabase Storage Presigned Upload URL", 
                description = "Khởi tạo URL tải ảnh trực tiếp từ trình duyệt Frontend lên Supabase Storage (Presigned PUT URL, có thời hạn 15 phút).")
@@ -70,6 +74,7 @@ public class ReportController {
         return ResponseEntity.ok(new BaseResponse<>(true, "Lấy thông tin báo cáo thành công", response));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/my-reports")
     @Operation(summary = "Danh sách báo cáo của tôi", description = "Lấy lịch sử các báo cáo lừa đảo do cá nhân đã nộp.")
     public ResponseEntity<BaseResponse<List<ReportResponse>>> getMyReports(
