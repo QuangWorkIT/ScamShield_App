@@ -190,13 +190,6 @@ CROSS JOIN LATERAL jsonb_populate_record(NULL::education_articles, jsonb_build_o
 )) AS populated
 WHERE NOT EXISTS (SELECT 1 FROM education_articles a WHERE a.slug = v.slug);
 
--- GET /api/education-hub: 4 scenarios và 3 pocketCards khi chỉ có các bản ghi mẫu này.
--- GET /api/education-hub/contents?contentType=SCENARIO&categoryCode=GIA_DANH_NGAN_HANG
--- GET /api/education-hub/contents?contentType=POCKET_CARD&sort=DISPLAY_ORDER
--- GET /api/education-hub/contents/sms-brandname-tram-phat-bts
--- GET /api/education-hub/filters
-
-
 -- 33. official_scam_warnings
 INSERT INTO official_scam_warnings (title, content, status, created_at) VALUES
 ('Cảnh báo khẩn: Làn sóng lừa đảo mùa Tết', 'Nhiều đối tượng lợi dụng dịp lễ để giả danh tổ chức từ thiện...', 'PUBLISHED', NOW());
@@ -206,12 +199,6 @@ INSERT INTO audit_logs (actor_user_id, action, entity_type, reason, created_at) 
 ((SELECT id FROM users WHERE email='admin@scamshield.vn'), 'CREATE', 'USER', 'Tạo tài khoản quản trị hệ thống', NOW());
 
 -- 35. Dashboard: dữ liệu cho GET /api/dashboard/summary và GET /api/dashboard/filters.
--- Nếu database đã có dữ liệu mẫu cơ bản ở trên, chỉ chạy từ mục 35 trở xuống.
--- Các INSERT trong mục này có kiểm tra tồn tại; chạy lại không thêm trùng và không đổi ngày đã lưu.
--- Ngày tương đối được tính theo giờ Việt Nam tại lúc chạy script, kể cả khi SQL client dùng UTC.
--- Dữ liệu dashboard từ 01/07/2026 (quý 3/2026) đến hiện tại: quý 3, quý 4, hôm nay, 7/30 ngày và kỳ trước.
--- Mã tỉnh: 01 Hà Nội, 79 TP.HCM, 48 Đà Nẵng, 31 Hải Phòng, 92 Cần Thơ, 24 Bắc Ninh.
--- Tên miền .example và STK MOCK-DASH-* chỉ dùng làm dữ liệu thử nghiệm.
 
 INSERT INTO scam_categories (code, name, description, version, is_active, created_at, updated_at)
 SELECT v.code, v.name, v.description, 1, true,
@@ -316,16 +303,6 @@ JOIN reports r ON r.description = 'DASHBOARD-MOCK:' || v.report_key
 WHERE NOT EXISTS (SELECT 1 FROM confirmed_indicators ci WHERE ci.indicator_id = i.id);
 
 -- 36. Khiếu nại: dữ liệu cho GET /api/disputes/me và GET /api/disputes/me/summary.
--- Khởi động lại API trước để Hibernate bổ sung các cột mới; nếu đã có dữ liệu cơ bản, chỉ chạy mục 36.
--- Chỉ INSERT, có kiểm tra tồn tại; chạy lại không thêm trùng hoặc đổi các ngày đã lưu.
--- Đăng nhập nguyenvana@gmail.com bằng mật khẩu mẫu ở mục 4: 12 hồ sơ của người này, đủ để thử phân trang size=10.
--- Thêm 1 hồ sơ của partner@shopee.vn để kiểm tra API không trả hồ sơ của người khác.
--- Mã DSP được API tạo từ ID thật, không cố định ID theo ảnh.
--- Ngày tính theo giờ Việt Nam. Tên miền .example, STK MOCK-DSP-* và số điện thoại dưới đây là dữ liệu thử.
--- URL file/PDF dưới files.example chỉ minh họa metadata, không có file thật để tải xuống.
--- Riêng 12 hồ sơ mẫu của nguyenvana@gmail.com: pending=3, inReview=2, needsMoreInfo=2, approved=3, rejected=2.
--- averageResolutionHours=14.2, restorationRate=60.0. Hồ sơ cũ trong database vẫn được tính thêm.
--- Có hồ sơ không có file, yêu cầu bổ sung đã quá hạn, mọi hồ sơ APPROVED đều có blacklist RETRACTED và retractedAt.
 
 INSERT INTO scam_categories (code, name, description, version, is_active, created_at, updated_at)
 SELECT 'GIA_DANH_NGAN_HANG', 'Mạo danh ngân hàng', 'Giả danh ngân hàng và lừa đảo tài khoản', 1, true,
@@ -471,13 +448,3 @@ FROM (VALUES
 ) AS v(dispute_key, file_name, file_url, description, verification_status)
 JOIN disputes d ON d.reason LIKE 'DISPUTE-MOCK:' || v.dispute_key || ' — %'
 WHERE NOT EXISTS (SELECT 1 FROM dispute_evidence e WHERE e.dispute_id = d.id AND e.file_url = v.file_url);
-
--- GET /api/disputes/me?page=0&size=10
--- GET /api/disputes/me?status=PENDING,IN_REVIEW,NEEDS_MORE_INFO
--- GET /api/disputes/me?status=APPROVED
--- GET /api/disputes/me?status=PENDING
--- GET /api/disputes/me?status=IN_REVIEW
--- GET /api/disputes/me?status=NEEDS_MORE_INFO
--- GET /api/disputes/me?status=REJECTED
--- GET /api/disputes/me?page=1&size=10
--- GET /api/disputes/me/summary
