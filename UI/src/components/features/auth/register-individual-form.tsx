@@ -1,7 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
+import { toast } from "react-toastify"
+import { authServices } from "@/features/auth/services/auth-services"
+import { getRecaptchaToken } from "@/lib/firebase/recaptcha"
 import {
   User,
   Phone,
@@ -56,10 +59,15 @@ function GoogleIcon({ className }: { className?: string }) {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_ONLY_DIGITS = /^\d+$/
+const FULL_NAME_REGEX = /^\p{Lu}\p{Ll}*(\s+\p{Lu}\p{Ll}*)*$/u
+const OTP_REGEX = /^\d{6}$/
+const OTP_RESEND_SECONDS = 60
+const RECAPTCHA_CONTAINER_ID = "register-recaptcha"
 
 interface FormState {
   fullName: string
   phone: string
+  otp: string
   email: string
   password: string
   confirmPassword: string
@@ -70,6 +78,7 @@ interface FormState {
 interface FormErrors {
   fullName?: string
   phone?: string
+  otp?: string
   email?: string
   password?: string
   confirmPassword?: string
@@ -83,6 +92,7 @@ export function RegisterIndividualForm() {
   const [form, setForm] = useState<FormState>({
     fullName: "",
     phone: "",
+    otp: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -93,6 +103,17 @@ export function RegisterIndividualForm() {
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmittedSuccess, setIsSubmittedSuccess] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSendingOtp, setIsSendingOtp] = useState(false)
+  const [otpSentTo, setOtpSentTo] = useState<string | null>(null)
+  const [cooldown, setCooldown] = useState(0)
+  const [serverError, setServerError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = setTimeout(() => setCooldown((s) => s - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [cooldown])
 
   function validateField(
     name: keyof FormState,
@@ -104,6 +125,14 @@ export function RegisterIndividualForm() {
         const val = String(value).trim()
         if (!val) return "Vui lòng nhập họ và tên."
         if (val.length < 2) return "Họ và tên phải có ít nhất 2 ký tự."
+        if (!FULL_NAME_REGEX.test(val))
+          return "Họ và tên phải viết hoa chữ cái đầu của mỗi từ."
+        return undefined
+      }
+      case "otp": {
+        const val = String(value).trim()
+        if (!val) return "Vui lòng nhập mã OTP."
+        if (!OTP_REGEX.test(val)) return "Mã OTP gồm đúng 6 chữ số."
         return undefined
       }
       case "phone": {
@@ -179,12 +208,39 @@ export function RegisterIndividualForm() {
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSendOtp() {
+    const phoneError = validateField("phone", form.phone)
+    setTouched((prev) => ({ ...prev, phone: true }))
+    setErrors((prev) => ({ ...prev, phone: phoneError }))
+    if (phoneError || isSendingOtp || cooldown > 0) return
+
+    setIsSendingOtp(true)
+    setServerError(null)
+    try {
+      const recaptchaToken = await getRecaptchaToken(RECAPTCHA_CONTAINER_ID)
+      const phone = form.phone.trim()
+      await authServices.sendPhoneOtp(phone, recaptchaToken)
+      setOtpSentTo(phone)
+      setCooldown(OTP_RESEND_SECONDS)
+      toast.success("Đã gửi mã OTP đến số điện thoại của bạn")
+    } catch (err) {
+      setServerError(
+        err instanceof Error ? err.message : "Không thể gửi mã OTP."
+      )
+    } finally {
+      setIsSendingOtp(false)
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (isSubmitting) return
+    setServerError(null)
 
     const newErrors: FormErrors = {
       fullName: validateField("fullName", form.fullName),
       phone: validateField("phone", form.phone),
+      otp: validateField("otp", form.otp),
       email: validateField("email", form.email),
       password: validateField("password", form.password),
       confirmPassword: validateField("confirmPassword", form.confirmPassword),
@@ -194,6 +250,7 @@ export function RegisterIndividualForm() {
     setTouched({
       fullName: true,
       phone: true,
+      otp: true,
       email: true,
       password: true,
       confirmPassword: true,
@@ -205,8 +262,37 @@ export function RegisterIndividualForm() {
     const hasError = Object.values(newErrors).some(Boolean)
     if (hasError) return
 
-    // UI task only (no API connection)
-    setIsSubmittedSuccess(true)
+    const phone = form.phone.trim()
+    if (otpSentTo !== phone) {
+      setErrors((prev) => ({
+        ...prev,
+        otp: "Vui lòng nhấn \"Gửi mã\" để nhận OTP cho số điện thoại này.",
+      }))
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const { verificationToken } = await authServices.verifyContacts(
+        phone,
+        form.otp.trim()
+      )
+      await authServices.registerPersonal({
+        fullName: form.fullName.trim(),
+        phoneNumber: phone,
+        email: form.email.trim(),
+        password: form.password,
+        verificationToken,
+        agreeTerms: form.agreeTerms,
+        receiveAlerts: form.receiveAlerts,
+      })
+      setIsSubmittedSuccess(true)
+      toast.success("Đăng ký thành công")
+    } catch (err) {
+      setServerError(err instanceof Error ? err.message : "Đăng ký thất bại.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -309,7 +395,16 @@ export function RegisterIndividualForm() {
             </h1>
           </div>
 
-          {/* Success Banner (Mock UI) */}
+          {serverError && (
+            <div
+              role="alert"
+              className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+            >
+              {serverError}
+            </div>
+          )}
+
+          {/* Success Banner */}
           {isSubmittedSuccess && (
             <div
               role="alert"
@@ -322,7 +417,7 @@ export function RegisterIndividualForm() {
               />
               <div className="text-sm">
                 <p className="font-semibold">
-                  Đăng ký thành công (Mô phỏng UI)!
+                  Đăng ký thành công!
                 </p>
                 <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-400">
                   Thông tin tài khoản của bạn đã được tiếp nhận. Đăng nhập để
@@ -398,6 +493,34 @@ export function RegisterIndividualForm() {
                 error={errors.email}
               />
             </div>
+
+            {/* Mã OTP SMS */}
+            <AuthInput
+              id="register-otp"
+              label="Mã OTP xác thực điện thoại"
+              required
+              inputMode="numeric"
+              maxLength={6}
+              icon={<ShieldCheck size={18} weight="regular" />}
+              placeholder="Nhập mã 6 chữ số"
+              value={form.otp}
+              onChange={(e) =>
+                handleChange("otp", e.target.value.replace(/\D/g, ""))
+              }
+              onBlur={() => handleBlur("otp")}
+              error={errors.otp}
+              actionLabel={
+                isSendingOtp
+                  ? "Đang gửi..."
+                  : cooldown > 0
+                    ? `Gửi lại sau ${cooldown}s`
+                    : otpSentTo
+                      ? "Gửi lại mã"
+                      : "Gửi mã"
+              }
+              onActionClick={handleSendOtp}
+            />
+            <div id={RECAPTCHA_CONTAINER_ID} />
 
             {/* Mật khẩu */}
             <AuthInput
@@ -491,13 +614,17 @@ export function RegisterIndividualForm() {
             <div className="mt-4">
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className={cn(
+                  "disabled:cursor-not-allowed disabled:opacity-60",
                   "flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#131A33] px-6 text-sm font-bold text-white shadow-md transition-all",
                   "hover:bg-[#131A33]/90 active:scale-[0.99] dark:bg-primary dark:hover:bg-primary/90"
                 )}
               >
                 <ShieldCheck size={20} weight="fill" />
-                <span>Tạo Tài Khoản An Toàn</span>
+                <span>
+                  {isSubmitting ? "Đang xử lý..." : "Tạo Tài Khoản An Toàn"}
+                </span>
               </button>
             </div>
           </form>
