@@ -496,6 +496,7 @@ export function RegisterIndividualForm() {
 
             {/* Mã OTP SMS */}
             <AuthInput
+              id="register-otp"
               label="Mã OTP xác thực điện thoại"
               required
               inputMode="numeric"

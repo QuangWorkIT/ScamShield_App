@@ -83,7 +83,7 @@ export default function GuestDashboardPage() {
         onPeriodChange={selectPeriod}
         onFilterChange={updateParams}
       />
-      {error ? (
+      {!summary && error ? (
         <ErrorState message={error} onRetry={reload} />
       ) : !summary ? (
         <DashboardSkeleton />
@@ -94,6 +94,23 @@ export default function GuestDashboardPage() {
             loading && "pointer-events-none opacity-60"
           )}
         >
+          {error && (
+            <div
+              role="alert"
+              className="mx-auto mb-6 flex w-full max-w-7xl items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+            >
+              <span>{error}</span>
+              <Button
+                type="button"
+                onClick={reload}
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+              >
+                <ArrowClockwise weight="bold" /> Thử lại
+              </Button>
+            </div>
+          )}
           <StatsGrid summary={summary} />
           <RegionalAnalysis summary={summary} />
           <TopThreats summary={summary} />
@@ -135,6 +152,8 @@ function DashboardHeader({
           {periods.map((p) => (
             <button
               key={p.value}
+              type="button"
+              aria-pressed={params.period === p.value}
               onClick={() => onPeriodChange(p.value)}
               className={cn(
                 "rounded-xl px-4 py-2.5 text-xs font-bold transition-all",

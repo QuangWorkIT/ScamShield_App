@@ -10,6 +10,22 @@ import type {
 
 const ERROR_MESSAGE = "Không thể tải dữ liệu dashboard. Vui lòng thử lại."
 
+// Used when /dashboard/filters fails so period buttons stay available.
+const FALLBACK_FILTER_OPTIONS: ScamDashboardFilters = {
+  timezone: "Asia/Ho_Chi_Minh",
+  defaultPeriod: "LAST_30_DAYS",
+  currentYear: new Date().getFullYear(),
+  currentQuarter: Math.floor(new Date().getMonth() / 3) + 1,
+  periods: [
+    { value: "TODAY", label: "Hôm nay" },
+    { value: "LAST_7_DAYS", label: "7 ngày qua" },
+    { value: "LAST_30_DAYS", label: "30 ngày qua" },
+  ],
+  regions: [],
+  categories: [],
+  indicatorTypes: [],
+}
+
 export function useScamDashboard() {
   const [filterOptions, setFilterOptions] =
     useState<ScamDashboardFilters | null>(null)
@@ -30,7 +46,8 @@ export function useScamDashboard() {
       })
       .catch(() => {
         if (cancelled) return
-        // Filters are optional for rendering; summary falls back to defaults.
+        // Summary falls back to defaults; keep a minimal static period list.
+        setFilterOptions(FALLBACK_FILTER_OPTIONS)
         setParams((prev) => ({ period: "LAST_30_DAYS", ...prev }))
       })
     return () => {

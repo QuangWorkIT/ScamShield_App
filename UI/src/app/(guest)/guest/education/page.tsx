@@ -101,6 +101,8 @@ function HeroSection({
               return (
                 <button
                   key={filter.code ?? "all"}
+                  type="button"
+                  aria-pressed={active}
                   onClick={() => onSelect(filter.code)}
                   className={cn(
                     "flex items-center gap-2 rounded-lg border px-2.5 py-2.5 text-xs font-bold transition-all duration-200",
@@ -201,23 +203,23 @@ function ScenarioCard({
   const insights = [
     {
       label: "NHẬN DIỆN",
-      text: content?.recognitionSigns?.[0],
+      items: content?.recognitionSigns ?? [],
       icon: Eye,
       color: theme.text,
     },
     {
       label: "MỤC TIÊU",
-      text: content?.scammerGoal,
+      items: content?.scammerGoal ? [content.scammerGoal] : [],
       icon: Target,
       color: "text-orange-500",
     },
     {
       label: "HÀNH ĐỘNG",
-      text: content?.recommendedActions?.[0],
+      items: content?.recommendedActions ?? [],
       icon: ShieldCheck,
       color: "text-blue-500",
     },
-  ].filter((i) => i.text)
+  ].filter((i) => i.items.length > 0)
 
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-lg border border-slate-100 bg-white shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
@@ -296,9 +298,17 @@ function ScenarioCard({
                   <insight.icon weight="bold" className="text-sm" />
                   {insight.label}
                 </div>
-                <p className="text-xs leading-relaxed font-medium text-slate-600 dark:text-slate-400">
-                  {insight.text}
-                </p>
+                {insight.items.length === 1 ? (
+                  <p className="text-xs leading-relaxed font-medium text-slate-600 dark:text-slate-400">
+                    {insight.items[0]}
+                  </p>
+                ) : (
+                  <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed font-medium text-slate-600 dark:text-slate-400">
+                    {insight.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ))}
           </div>
