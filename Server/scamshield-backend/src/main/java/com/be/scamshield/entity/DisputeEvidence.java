@@ -3,8 +3,13 @@ package com.be.scamshield.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+
 @Entity
-@Table(name = "dispute_evidence")
+@Table(name = "dispute_evidence", indexes = {
+        @Index(name = "idx_dispute_evidence_dispute_created", columnList = "dispute_id, created_at")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,6 +31,9 @@ public class DisputeEvidence {
     @Column(name = "file_url")
     private String fileUrl;
 
+    @Column(name = "file_name", length = 255)
+    private String fileName;
+
     @Column(name = "file_hash")
     private String fileHash;
 
@@ -36,6 +44,13 @@ public class DisputeEvidence {
     private String verificationStatus;
 
     @Column(name = "created_at", nullable = false)
-    private java.time.LocalDateTime createdAt;
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        }
+    }
 
 }

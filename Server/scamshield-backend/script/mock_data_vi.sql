@@ -314,3 +314,170 @@ JOIN scam_categories c ON c.code = v.category_code
 JOIN users u ON u.email = 'admin@scamshield.vn'
 JOIN reports r ON r.description = 'DASHBOARD-MOCK:' || v.report_key
 WHERE NOT EXISTS (SELECT 1 FROM confirmed_indicators ci WHERE ci.indicator_id = i.id);
+
+-- 36. Khiếu nại: dữ liệu cho GET /api/disputes/me và GET /api/disputes/me/summary.
+-- Khởi động lại API trước để Hibernate bổ sung các cột mới; nếu đã có dữ liệu cơ bản, chỉ chạy mục 36.
+-- Chỉ INSERT, có kiểm tra tồn tại; chạy lại không thêm trùng hoặc đổi các ngày đã lưu.
+-- Đăng nhập nguyenvana@gmail.com bằng mật khẩu mẫu ở mục 4: 12 hồ sơ của người này, đủ để thử phân trang size=10.
+-- Thêm 1 hồ sơ của partner@shopee.vn để kiểm tra API không trả hồ sơ của người khác.
+-- Mã DSP được API tạo từ ID thật, không cố định ID theo ảnh.
+-- Ngày tính theo giờ Việt Nam. Tên miền .example, STK MOCK-DSP-* và số điện thoại dưới đây là dữ liệu thử.
+-- URL file/PDF dưới files.example chỉ minh họa metadata, không có file thật để tải xuống.
+-- Riêng 12 hồ sơ mẫu của nguyenvana@gmail.com: pending=3, inReview=2, needsMoreInfo=2, approved=3, rejected=2.
+-- averageResolutionHours=14.2, restorationRate=60.0. Hồ sơ cũ trong database vẫn được tính thêm.
+-- Có hồ sơ không có file, yêu cầu bổ sung đã quá hạn, mọi hồ sơ APPROVED đều có blacklist RETRACTED và retractedAt.
+
+INSERT INTO scam_categories (code, name, description, version, is_active, created_at, updated_at)
+SELECT 'GIA_DANH_NGAN_HANG', 'Mạo danh ngân hàng', 'Giả danh ngân hàng và lừa đảo tài khoản', 1, true,
+       CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'
+WHERE NOT EXISTS (SELECT 1 FROM scam_categories WHERE code = 'GIA_DANH_NGAN_HANG');
+
+INSERT INTO indicators (type, normalized_value, display_value, created_at, updated_at)
+SELECT v.type, v.value, v.display_value,
+       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '10 days',
+       CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'
+FROM (VALUES
+    ('URL', 'dispute-pending.example', 'dispute-pending.example'),
+    ('PHONE', '0919000091', '091.900.0091 (Hotline doanh nghiệp mẫu)'),
+    ('BANK_ACCOUNT', 'MOCK-DSP-BANK-001', 'STK Techcombank 1029999.xxxx (mẫu)'),
+    ('URL', 'dispute-techcorp.example', 'dispute-techcorp.example'),
+    ('PHONE', '0919000092', '091.900.0092 (Hotline đã được giải tỏa)'),
+    ('URL', 'dispute-rejected.example', 'dispute-rejected.example'),
+    ('URL', 'dispute-partner.example', 'dispute-partner.example'),
+    ('BANK_ACCOUNT', 'MOCK-DSP-BANK-002', '1029999.xxxx'),
+    ('PHONE', '0919000094', '091.900.0094'),
+    ('URL', 'dispute-review-shop.example', 'dispute-review-shop.example'),
+    ('URL', 'dispute-supplement-overdue.example', 'dispute-supplement-overdue.example'),
+    ('URL', 'dispute-approved-active.example', 'dispute-approved-active.example'),
+    ('BANK_ACCOUNT', 'MOCK-DSP-BANK-003', '1902999.xxxx')
+) AS v(type, value, display_value)
+WHERE NOT EXISTS (SELECT 1 FROM indicators i WHERE i.type = v.type AND i.normalized_value = v.value);
+
+INSERT INTO confirmed_indicators (indicator_id, category_id, status, confirmed_by, confirmed_at,
+                                  retracted_at, retraction_reason, public_reason)
+SELECT i.id, c.id, v.status, u.id,
+       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '10 days',
+       CASE WHEN v.status = 'RETRACTED' THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') + v.retracted_offset ELSE NULL END,
+       CASE WHEN v.status = 'RETRACTED' THEN 'Dữ liệu mẫu: khiếu nại được chấp nhận, thu hồi xác thực sai' ELSE NULL END,
+       'Dữ liệu mẫu phục vụ kiểm thử danh sách khiếu nại'
+FROM (VALUES
+    ('dispute-pending.example', 'VIEC_LAM', 'ACTIVE', NULL::interval),
+    ('0919000091', 'GIA_DANH_CQCN', 'ACTIVE', NULL::interval),
+    ('MOCK-DSP-BANK-001', 'GIA_DANH_NGAN_HANG', 'ACTIVE', NULL::interval),
+    ('dispute-techcorp.example', 'GIA_DANH_CQCN', 'RETRACTED', -INTERVAL '84 hours'),
+    ('0919000092', 'GIA_DANH_CQCN', 'RETRACTED', -INTERVAL '54 hours'),
+    ('dispute-rejected.example', 'VIEC_LAM', 'ACTIVE', NULL::interval),
+    ('dispute-partner.example', 'VIEC_LAM', 'ACTIVE', NULL::interval),
+    ('MOCK-DSP-BANK-002', 'GIA_DANH_NGAN_HANG', 'ACTIVE', NULL::interval),
+    ('0919000094', 'GIA_DANH_CQCN', 'ACTIVE', NULL::interval),
+    ('dispute-review-shop.example', 'VIEC_LAM', 'ACTIVE', NULL::interval),
+    ('dispute-supplement-overdue.example', 'VIEC_LAM', 'ACTIVE', NULL::interval),
+    ('dispute-approved-active.example', 'GIA_DANH_CQCN', 'RETRACTED', -INTERVAL '3 hours'),
+    ('MOCK-DSP-BANK-003', 'GIA_DANH_NGAN_HANG', 'ACTIVE', NULL::interval)
+) AS v(value, category_code, status, retracted_offset)
+JOIN indicators i ON i.normalized_value = v.value
+JOIN scam_categories c ON c.code = v.category_code
+JOIN users u ON u.email = 'admin@scamshield.vn'
+WHERE NOT EXISTS (SELECT 1 FROM confirmed_indicators ci WHERE ci.indicator_id = i.id);
+
+INSERT INTO disputes (confirmed_indicator_id, submitted_by_user_id, submitter_name, submitter_contact,
+                      reason, status, priority, progress_message, estimated_resolution_at,
+                      supplement_reason, supplement_deadline, assigned_to, resolved_by,
+                      resolution_reason, resolution_document_url, created_at, updated_at, resolved_at)
+SELECT ci.id, u.id, u.full_name, u.email, 'DISPUTE-MOCK:' || v.key || ' — ' || v.reason, v.status, v.priority,
+       v.progress_message,
+       CASE WHEN v.estimated_offset IS NOT NULL THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') + v.estimated_offset ELSE NULL END,
+       v.supplement_reason,
+       CASE WHEN v.supplement_offset IS NOT NULL THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') + v.supplement_offset ELSE NULL END,
+       CASE WHEN v.status <> 'PENDING' THEN reviewer.id ELSE NULL END,
+       CASE WHEN v.status IN ('APPROVED', 'REJECTED') THEN reviewer.id ELSE NULL END,
+       v.resolution_reason, v.resolution_document_url,
+       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') + v.created_offset,
+       CASE WHEN v.resolved_offset IS NOT NULL THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') + v.resolved_offset
+            ELSE CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh' END,
+       CASE WHEN v.resolved_offset IS NOT NULL THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') + v.resolved_offset ELSE NULL END
+FROM (VALUES
+    ('pending-domain', 'dispute-pending.example', 'nguyenvana@gmail.com', 'Tên miền chính chủ bị gắn nhãn nhầm.', 'PENDING', 'NORMAL',
+     'Đã tiếp nhận hồ sơ, đang chờ phân công người thẩm định.', INTERVAL '47 hours', NULL::text, NULL::interval,
+     NULL::text, NULL::text, -INTERVAL '1 hour', NULL::interval),
+    ('review-hotline', '0919000091', 'nguyenvana@gmail.com', 'Hotline doanh nghiệp bị nhầm với số mạo danh.', 'IN_REVIEW', 'HIGH',
+     'Đang đối chiếu giấy phép kinh doanh và chứng từ sở hữu đầu số.', INTERVAL '22 hours', NULL::text, NULL::interval,
+     NULL::text, NULL::text, -INTERVAL '6 hours', NULL::interval),
+    ('supplement-bank', 'MOCK-DSP-BANK-001', 'nguyenvana@gmail.com', 'Tài khoản ngân hàng của tôi bị báo cáo sai.', 'NEEDS_MORE_INFO', 'NORMAL',
+     'Hồ sơ cần bổ sung bằng chứng trước khi tiếp tục thẩm định.', NULL::interval,
+     'Vui lòng bổ sung sao kê giao dịch và giấy xác nhận chủ tài khoản.', INTERVAL '2 days',
+     NULL::text, NULL::text, -INTERVAL '1 day', NULL::interval),
+    ('restored-domain', 'dispute-techcorp.example', 'nguyenvana@gmail.com', 'Tên miền doanh nghiệp bị giả mạo dẫn đến gắn nhãn sai.', 'APPROVED', 'HIGH',
+     'Đã hoàn tất thẩm định và thu hồi xác thực blacklist sai.', NULL::interval, NULL::text, NULL::interval,
+     'Đã xác minh quyền sở hữu tên miền và chấp nhận khiếu nại. Xác thực blacklist trong ScamShield đã được thu hồi.',
+     'https://files.example/disputes/restored-domain/quyet-dinh-giai-toa.pdf', -INTERVAL '96 hours', -INTERVAL '84 hours'),
+    ('restored-phone', '0919000092', 'nguyenvana@gmail.com', 'Số điện thoại chính chủ bị gắn nhãn sai.', 'APPROVED', 'NORMAL',
+     'Đã hoàn tất thẩm định và giải tỏa chỉ số trong ScamShield.', NULL::interval, NULL::text, NULL::interval,
+     'Chứng từ thuê đầu số hợp lệ; chấp nhận khiếu nại và thu hồi xác thực blacklist.',
+     'https://files.example/disputes/restored-phone/bien-ban-giai-toa.pdf', -INTERVAL '72 hours', -INTERVAL '54 hours'),
+    ('rejected-domain', 'dispute-rejected.example', 'nguyenvana@gmail.com', 'Đề nghị xem xét lại kết quả xác thực tên miền.', 'REJECTED', 'NORMAL',
+     'Đã hoàn tất thẩm định, giữ nguyên xác thực blacklist.', NULL::interval, NULL::text, NULL::interval,
+     'Bằng chứng chưa chứng minh quyền sở hữu hợp lệ; khiếu nại bị từ chối, xác thực blacklist vẫn còn hiệu lực.',
+     NULL::text, -INTERVAL '48 hours', -INTERVAL '1368 minutes'),
+    ('partner-private', 'dispute-partner.example', 'partner@shopee.vn', 'Hồ sơ riêng của tài khoản đối tác để kiểm tra phân quyền.', 'PENDING', 'NORMAL',
+     'Đã tiếp nhận hồ sơ của đối tác.', INTERVAL '47 hours', NULL::text, NULL::interval,
+     NULL::text, NULL::text, -INTERVAL '2 hours', NULL::interval),
+    ('pending-bank', 'MOCK-DSP-BANK-002', 'nguyenvana@gmail.com', 'Đề nghị xác minh lại tài khoản ngân hàng bị báo cáo nhầm.', 'PENDING', 'NORMAL',
+     'Đã tiếp nhận hồ sơ tài khoản ngân hàng, chờ phân công thẩm định.', INTERVAL '46 hours', NULL::text, NULL::interval,
+     NULL::text, NULL::text, -INTERVAL '2 hours', NULL::interval),
+    ('pending-phone-empty', '0919000094', 'nguyenvana@gmail.com', 'Số điện thoại cá nhân bị nhầm là số mạo danh.', 'PENDING', 'NORMAL',
+     'Đã tiếp nhận hồ sơ; chưa có tệp đính kèm.', INTERVAL '47 hours', NULL::text, NULL::interval,
+     NULL::text, NULL::text, -INTERVAL '30 minutes', NULL::interval),
+    ('review-shop', 'dispute-review-shop.example', 'nguyenvana@gmail.com', 'Website cửa hàng chính chủ bị gắn nhãn lừa đảo.', 'IN_REVIEW', 'HIGH',
+     'Đang kiểm tra quyền quản trị tên miền và đối chiếu chứng từ giao dịch của cửa hàng.', INTERVAL '4 hours', NULL::text, NULL::interval,
+     NULL::text, NULL::text, -INTERVAL '12 hours', NULL::interval),
+    ('supplement-overdue', 'dispute-supplement-overdue.example', 'nguyenvana@gmail.com', 'Yêu cầu xác minh lại tên miền bị gắn nhãn sai.', 'NEEDS_MORE_INFO', 'NORMAL',
+     'Chưa nhận được tài liệu bổ sung; hạn bổ sung đã hết.', NULL::interval,
+     'Bổ sung chứng nhận sở hữu tên miền và hóa đơn của nhà đăng ký.', -INTERVAL '1 day',
+     NULL::text, NULL::text, -INTERVAL '3 days', NULL::interval),
+    ('approved-awaiting-retraction', 'dispute-approved-active.example', 'nguyenvana@gmail.com', 'Đã cung cấp bằng chứng quyền sở hữu tên miền hợp lệ.', 'APPROVED', 'HIGH',
+     'Đã chấp nhận khiếu nại và thu hồi xác thực blacklist.', NULL::interval, NULL::text, NULL::interval,
+     'Chấp nhận khiếu nại và thu hồi xác thực blacklist sai sau khi xác minh quyền sở hữu tên miền.',
+     'https://files.example/disputes/approved-awaiting-retraction/quyet-dinh.pdf', -INTERVAL '9 hours', -INTERVAL '3 hours'),
+    ('rejected-bank', 'MOCK-DSP-BANK-003', 'nguyenvana@gmail.com', 'Đề nghị giải tỏa tài khoản ngân hàng đang bị cảnh báo.', 'REJECTED', 'NORMAL',
+     'Đã hoàn tất kiểm tra hồ sơ; giữ nguyên xác thực blacklist.', NULL::interval, NULL::text, NULL::interval,
+     'Tài liệu không khớp thông tin chủ tài khoản; từ chối khiếu nại.',
+     NULL::text, -INTERVAL '36 hours', -INTERVAL '26 hours')
+) AS v(key, value, email, reason, status, priority, progress_message, estimated_offset,
+       supplement_reason, supplement_offset, resolution_reason, resolution_document_url, created_offset, resolved_offset)
+JOIN indicators i ON i.normalized_value = v.value
+JOIN confirmed_indicators ci ON ci.indicator_id = i.id
+JOIN users u ON u.email = v.email
+JOIN users reviewer ON reviewer.email = 'admin@scamshield.vn'
+WHERE NOT EXISTS (SELECT 1 FROM disputes d WHERE d.reason LIKE 'DISPUTE-MOCK:' || v.key || ' — %');
+
+INSERT INTO dispute_evidence (dispute_id, evidence_type, file_name, file_url, description, verification_status, created_at)
+SELECT d.id, 'DOCUMENT', v.file_name, v.file_url, v.description, v.verification_status, d.created_at + INTERVAL '5 minutes'
+FROM (VALUES
+    ('pending-domain', 'xac-nhan-ten-mien.pdf', 'https://files.example/disputes/pending-domain/xac-nhan-ten-mien.pdf', 'Giấy xác nhận đăng ký tên miền.', 'PENDING'),
+    ('review-hotline', 'giay-phep-kinh-doanh.pdf', 'https://files.example/disputes/review-hotline/giay-phep-kinh-doanh.pdf', 'Giấy phép đăng ký kinh doanh của doanh nghiệp mẫu.', 'PENDING'),
+    ('review-hotline', 'hop-dong-thue-dau-so.pdf', 'https://files.example/disputes/review-hotline/hop-dong-thue-dau-so.pdf', 'Hợp đồng thuê đầu số hotline.', 'PENDING'),
+    ('supplement-bank', 'xac-nhan-chu-tai-khoan.pdf', 'https://files.example/disputes/supplement-bank/xac-nhan-chu-tai-khoan.pdf', 'Bản xác nhận tài khoản cần đối chiếu thêm sao kê.', 'PENDING'),
+    ('restored-domain', 'chung-nhan-so-huu-domain.pdf', 'https://files.example/disputes/restored-domain/chung-nhan-so-huu-domain.pdf', 'Chứng nhận quyền sở hữu tên miền đã được đối chiếu.', 'VERIFIED'),
+    ('restored-phone', 'hop-dong-vien-thong.pdf', 'https://files.example/disputes/restored-phone/hop-dong-vien-thong.pdf', 'Hợp đồng thuê đầu số chính chủ đã được đối chiếu.', 'VERIFIED'),
+    ('rejected-domain', 'minh-chung-khieu-nai.pdf', 'https://files.example/disputes/rejected-domain/minh-chung-khieu-nai.pdf', 'Tài liệu không đủ cơ sở xác minh quyền sở hữu.', 'REJECTED'),
+    ('partner-private', 'tai-lieu-doi-tac.pdf', 'https://files.example/disputes/partner-private/tai-lieu-doi-tac.pdf', 'Tài liệu riêng của tài khoản đối tác.', 'PENDING'),
+    ('pending-bank', 'xac-nhan-tai-khoan.pdf', 'https://files.example/disputes/pending-bank/xac-nhan-tai-khoan.pdf', 'Thông tin tài khoản chờ đối chiếu.', 'PENDING'),
+    ('review-shop', 'chung-nhan-ten-mien.pdf', 'https://files.example/disputes/review-shop/chung-nhan-ten-mien.pdf', 'Chứng nhận tên miền cửa hàng.', 'VERIFIED'),
+    ('review-shop', 'hoa-don-giao-dich.pdf', 'https://files.example/disputes/review-shop/hoa-don-giao-dich.pdf', 'Hóa đơn đang được đối chiếu.', 'PENDING'),
+    ('supplement-overdue', 'anh-website.png', 'https://files.example/disputes/supplement-overdue/anh-website.png', 'Ảnh website chưa đủ xác nhận quyền sở hữu.', 'PENDING'),
+    ('approved-awaiting-retraction', 'chung-nhan-so-huu.pdf', 'https://files.example/disputes/approved-awaiting-retraction/chung-nhan-so-huu.pdf', 'Chứng nhận quyền sở hữu đã được xác minh.', 'VERIFIED'),
+    ('rejected-bank', 'giay-xac-nhan.pdf', 'https://files.example/disputes/rejected-bank/giay-xac-nhan.pdf', 'Tài liệu không khớp chủ tài khoản.', 'REJECTED')
+) AS v(dispute_key, file_name, file_url, description, verification_status)
+JOIN disputes d ON d.reason LIKE 'DISPUTE-MOCK:' || v.dispute_key || ' — %'
+WHERE NOT EXISTS (SELECT 1 FROM dispute_evidence e WHERE e.dispute_id = d.id AND e.file_url = v.file_url);
+
+-- GET /api/disputes/me?page=0&size=10
+-- GET /api/disputes/me?status=PENDING,IN_REVIEW,NEEDS_MORE_INFO
+-- GET /api/disputes/me?status=APPROVED
+-- GET /api/disputes/me?status=PENDING
+-- GET /api/disputes/me?status=IN_REVIEW
+-- GET /api/disputes/me?status=NEEDS_MORE_INFO
+-- GET /api/disputes/me?status=REJECTED
+-- GET /api/disputes/me?page=1&size=10
+-- GET /api/disputes/me/summary
