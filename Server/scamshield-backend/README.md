@@ -38,13 +38,13 @@ $jwtRandom.Dispose()
 2. Vào **Run → Edit Configurations**. Chọn cấu hình `ScamshieldBackendApplication`; nếu chưa có, tạo cấu hình **Application**.
 3. Đặt các trường sau:
 
-| Trường | Giá trị |
-| --- | --- |
-| Main class | `com.be.scamshield.ScamshieldBackendApplication` |
-| Use classpath of module | Module `scamshield-backend` |
-| JDK / JRE | Java 21 |
-| Working directory | `D:\Huy-D\FPTU\Semester9\ScamShield_App\Server\scamshield-backend` |
-| Program arguments | `--spring.profiles.active=dev` |
+| Trường                  | Giá trị                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| Main class              | `com.be.scamshield.ScamshieldBackendApplication`                   |
+| Use classpath of module | Module `scamshield-backend`                                        |
+| JDK / JRE               | Java 21                                                            |
+| Working directory       | `D:\Huy-D\FPTU\Semester9\ScamShield_App\Server\scamshield-backend` |
+| Program arguments       | `--spring.profiles.active=dev`                                     |
 
 Nếu trường bị ẩn, mở **Modify options** để hiện **Working directory** hoặc **Program arguments**. Xem [hướng dẫn IntelliJ](https://www.jetbrains.com/help/idea/run-debug-configuration-java-application.html).
 
@@ -88,65 +88,6 @@ Sau khi API đã chạy và tạo bảng, dùng file [script/mock_data_vi.sql](s
 Không cần nhập lại các câu INSERT trong terminal. Chỉ nạp lần đầu khi database chưa có dữ liệu mẫu; script chỉ INSERT, không xóa dữ liệu cũ.
 
 Nếu container **`mock-data-seeder`** đã được tạo, có thể bấm **Start** trong Docker Desktop sau khi API tạo bảng; container sẽ tự chạy cùng file script. Chọn một cách nạp dữ liệu để tránh chạy script hai lần.
-
-## API khiếu nại và lưu nháp
-
-Các API dưới đây cần đăng nhập bằng JWT:
-
-| API | Chức năng |
-| --- | --- |
-| `POST /api/disputes` | Gửi hồ sơ mới, tạo trạng thái `PENDING` |
-| `POST /api/disputes/drafts` | Lưu nháp, cho phép chưa đủ thông tin |
-| `PUT /api/disputes/drafts/{id}` | Lưu lại nội dung nháp, thêm/xóa tệp |
-| `GET /api/disputes/drafts` | Danh sách nháp của tôi, có `page`, `size` |
-| `GET /api/disputes/drafts/{id}` | Mở nháp để tiếp tục nhập |
-| `POST /api/disputes/drafts/{id}/submit` | Gửi bản nháp thành hồ sơ chính thức |
-
-API ghi dữ liệu dùng `multipart/form-data`: part `request` là JSON, part `files` là các tài liệu PDF/JPG/PNG, tối đa **5MB/tệp, 10 tệp/hồ sơ**. Ví dụ JSON khi gửi:
-
-```json
-{
-  "indicatorType": "PHONE",
-  "indicatorValue": "0912348899",
-  "legalRelationship": "LEGAL_REPRESENTATIVE",
-  "reason": "Hotline chính chủ của doanh nghiệp bị gắn nhãn sai.",
-  "agreeTerms": true
-}
-```
-
-`indicatorType`: `PHONE`, `BANK_ACCOUNT`, `URL`, `BRANDNAME`. `legalRelationship`: `OWNER` (chủ sở hữu), `LEGAL_REPRESENTATIVE` (đại diện pháp luật), `AUTHORIZED_REPRESENTATIVE` (người được ủy quyền).
-
-Khi lưu nháp có thể gửi `{}`. Khi cập nhật nháp, gửi lại toàn bộ các trường muốn giữ; trường bị bỏ sẽ được xóa. Tệp mới được thêm vào, `removedEvidenceIds` là danh sách ID tệp muốn bỏ. Khi gửi nháp, gửi JSON đầy đủ như trên; backend dùng lại các tệp đã lưu nên không cần upload lại. Hồ sơ nháp chưa tính vào `/me` và `/me/summary`.
-
-Backend chỉ nhận hồ sơ chính thức khi tìm thấy xác thực blacklist `ACTIVE`. Nếu đã `RETRACTED`, hoặc bạn đã có đơn đang xử lý cho cùng chỉ số, API trả `409`; không tìm thấy xác thực trả `404`.
-
-**Lưu tài liệu:** Hồ sơ khiếu nại lưu tài liệu vào S3 bucket (mặc định dùng chung bucket `evidences` từ `AWS_S3_BUCKET_NAME`). Điền thông tin S3 vào `.env` rồi restart API:
-
-```dotenv
-# S3 Configurations
-AWS_REGION=ap-south-1
-AWS_ACCESS_KEY_ID=your-access-key-id
-AWS_SECRET_ACCESS_KEY=your-secret-access-key
-AWS_S3_BUCKET_NAME=evidences
-AWS_S3_ENDPOINT_OVERRIDE=
-```
-
-API trả liên kết tải có thời hạn (mặc định 900 giây, tùy chỉnh qua `DISPUTE_FILE_URL_EXPIRATION_SECONDS`); lấy lại hồ sơ để nhận liên kết mới khi hết hạn. Nếu thiếu cấu hình hoặc kho lưu trữ lỗi, API trả `503` và hồ sơ không bị lưu dở dang.
-
-**Nếu database đã có bảng `disputes` từ phiên bản cũ:** chạy SQL sau trong công cụ SQL của bạn để cho phép nháp thiếu nội dung và thêm trạng thái `DRAFT`, rồi restart API. Đây là cập nhật schema, không chạy trong `mock_data_vi.sql`.
-
-```sql
-BEGIN;
-ALTER TABLE disputes ALTER COLUMN confirmed_indicator_id DROP NOT NULL;
-ALTER TABLE disputes ALTER COLUMN reason DROP NOT NULL;
-ALTER TABLE disputes ALTER COLUMN reason TYPE text;
-ALTER TABLE disputes DROP CONSTRAINT IF EXISTS disputes_status_check;
-ALTER TABLE disputes ADD CONSTRAINT disputes_status_check
-  CHECK (status IN ('DRAFT', 'PENDING', 'IN_REVIEW', 'NEEDS_MORE_INFO', 'APPROVED', 'REJECTED'));
-COMMIT;
-```
-
-Database mới được Hibernate tạo theo entity hiện tại, không cần bước SQL này.
 
 ## Nếu gặp lỗi
 
