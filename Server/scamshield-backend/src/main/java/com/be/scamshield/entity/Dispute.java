@@ -1,5 +1,7 @@
 package com.be.scamshield.entity;
 
+import com.be.scamshield.constant.DisputeIndicatorType;
+import com.be.scamshield.constant.DisputeLegalRelationship;
 import com.be.scamshield.constant.DisputePriority;
 import com.be.scamshield.constant.DisputeStatus;
 import jakarta.persistence.*;
@@ -24,7 +26,7 @@ public class Dispute {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "confirmed_indicator_id", nullable = false)
+    @JoinColumn(name = "confirmed_indicator_id")
     private ConfirmedIndicator confirmedIndicator;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -37,8 +39,22 @@ public class Dispute {
     @Column(name = "submitter_contact")
     private String submitterContact;
 
-    @Column(name = "reason", nullable = false)
+    @Column(name = "reason", columnDefinition = "text")
     private String reason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "legal_relationship", length = 40)
+    private DisputeLegalRelationship legalRelationship;
+
+    @Column(name = "declaration_accepted_at")
+    private LocalDateTime declarationAcceptedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "draft_indicator_type", length = 30)
+    private DisputeIndicatorType draftIndicatorType;
+
+    @Column(name = "draft_indicator_value", length = 255)
+    private String draftIndicatorValue;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)

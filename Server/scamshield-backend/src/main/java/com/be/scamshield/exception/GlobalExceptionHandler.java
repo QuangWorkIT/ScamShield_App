@@ -12,12 +12,18 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<BaseResponse<Void>> handleInvalidParameterType(MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.badRequest().body(new BaseResponse<>(false, "Tham số " + ex.getName() + " không đúng định dạng", null));
+    }
 
     @ExceptionHandler(OtpRateLimitException.class)
     public ResponseEntity<BaseResponse<Void>> handleOtpRateLimit(OtpRateLimitException ex) {
@@ -31,8 +37,14 @@ public class GlobalExceptionHandler {
                 .body(new BaseResponse<>(false, ex.getMessage(), null));
     }
 
-    @ExceptionHandler(RegistrationConflictException.class)
-    public ResponseEntity<BaseResponse<Void>> handleRegistrationConflict(RegistrationConflictException ex) {
+    @ExceptionHandler(DisputeStorageException.class)
+    public ResponseEntity<BaseResponse<Void>> handleDisputeStorage(DisputeStorageException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new BaseResponse<>(false, ex.getMessage(), null));
+    }
+
+    @ExceptionHandler({RegistrationConflictException.class, DisputeConflictException.class})
+    public ResponseEntity<BaseResponse<Void>> handleConflict(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new BaseResponse<>(false, ex.getMessage(), null));
     }
 
