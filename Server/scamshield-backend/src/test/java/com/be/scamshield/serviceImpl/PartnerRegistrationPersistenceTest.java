@@ -54,7 +54,10 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @SpringBootTest(useMainMethod = SpringBootTest.UseMainMethod.ALWAYS,
-        properties = "app.contact-verification.expiration-ms=120000")
+        properties = {
+                "app.contact-verification.expiration-ms=120000",
+                "spring.datasource.url=jdbc:h2:mem:scamshield-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1"
+        })
 @ActiveProfiles("test")
 class PartnerRegistrationPersistenceTest {
     @Autowired
@@ -115,12 +118,11 @@ class PartnerRegistrationPersistenceTest {
         request.setLegalName("Công ty Example");
         request.setTaxCode("0100112437");
         request.setCorporateEmail("contact@example.com.vn");
-        request.setPassword("Example123!");
         request.setRepresentativeNameAndTitle("Huy - Giám đốc");
         request.setContactPhone("0912345678");
-        request.setOfficialDomains(List.of("example.com.vn"));
-        request.setOfficialHotlines(List.of("1900545413"));
-        request.setSmsBrandNames(List.of("EXAMPLE"));
+        request.setOfficialDomains("example.com.vn");
+        request.setOfficialHotlines("1900545413");
+        request.setSmsBrandNames("EXAMPLE");
         request.setLegalRepresentative(true);
         request.setAgreeTerms(true);
         files = List.of(new MockMultipartFile("file", "proof.pdf", "application/pdf",
@@ -128,7 +130,7 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @Test
-    void commitsLinkedAccountWithBcryptAndPendingApplicationWithoutWhitelist() {
+    void commitsLinkedAccountWithGeneratedPasswordAndPendingApplicationWithoutWhitelist() {
         prepareVerification();
         long usersBefore = userRepository.count();
         PartnerRegistrationResponse response = service.register(request, files, files, null);
@@ -146,8 +148,8 @@ class PartnerRegistrationPersistenceTest {
             assertThat(user.getRole().getName()).isEqualTo(RoleEnum.BUSINESS_PARTNER.name());
             assertThat(user.getStatus()).isEqualTo(UserStatus.INACTIVE.name());
             assertThat(user.getIsPhoneVerified()).isTrue();
-            assertThat(user.getPasswordHash()).isNotEqualTo(request.getPassword());
-            assertThat(passwordEncoder.matches(request.getPassword(), user.getPasswordHash())).isTrue();
+            assertThat(user.getPasswordHash()).startsWith("$2a$");
+            assertThat(passwordEncoder.matches("Example123!", user.getPasswordHash())).isFalse();
             assertThat(profileRepository.findById(response.getRegistrationId()).orElseThrow().getUser().getId())
                     .isEqualTo(user.getId());
             PartnerProfile profile = profileRepository.findById(response.getRegistrationId()).orElseThrow();
