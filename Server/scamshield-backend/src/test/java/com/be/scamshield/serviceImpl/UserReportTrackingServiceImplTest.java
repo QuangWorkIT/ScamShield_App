@@ -197,4 +197,63 @@ class UserReportTrackingServiceImplTest {
         assertThat(text).contains("#RPT-8492");
         assertThat(text).contains("089.842.xxxx");
     }
+
+    @Test
+    void exportCsvNeutralizesFormulaCharacters() {
+        Long userId = 1L;
+        Indicator indicator = Indicator.builder()
+                .type("PHONE")
+                .displayValue("=1+1")
+                .build();
+
+        Report report = Report.builder()
+                .id(8493L)
+                .indicator(indicator)
+                .status("PENDING")
+                .description("@SUM(A1:A5)")
+                .createdAt(fixedNow.minusMinutes(10))
+                .build();
+
+        when(reportRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of(report));
+
+        byte[] csv = service.exportTrackingReportsCsv(userId, null, "ALL", null, null);
+        String text = new String(csv, StandardCharsets.UTF_8);
+
+        assertThat(text).contains("\"'=1+1\"");
+        assertThat(text).contains("\"'@SUM(A1:A5)\"");
+    }
+
+    @Test
+    void getTrackingReportsDerivesDeterministicHashIgnoringIpAndDeviceHash() {
+        Long userId = 1L;
+        Indicator indicator = Indicator.builder()
+                .type("PHONE")
+                .normalizedValue("0898421234")
+                .displayValue("089.842.xxxx")
+                .build();
+
+        Report report = Report.builder()
+                .id(8492L)
+                .indicator(indicator)
+                .status("PENDING")
+                .ipHash("IP_HASH_SHOULD_BE_IGNORED")
+                .deviceFingerprintHash("DEVICE_HASH_SHOULD_BE_IGNORED")
+                .createdAt(fixedNow.minusMinutes(14))
+                .updatedAt(fixedNow)
+                .build();
+
+        when(reportRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(report), PageRequest.of(0, 10), 1));
+        when(reportEvidenceRepository.findByReportIdIn(any())).thenReturn(List.of());
+        when(moderationActionRepository.findByReportIdInOrderByCreatedAtDesc(any())).thenReturn(List.of());
+
+        PaginatedResponse<TrackingReportResponse> response = service.getTrackingReports(
+                userId, null, "ALL", null, null, PageRequest.of(0, 10));
+
+        TrackingReportResponse item = response.getData().get(0);
+        assertThat(item.getHashId()).doesNotContain("IP_H");
+        assertThat(item.getHashId()).doesNotContain("DEVI");
+        assertThat(item.getHashId()).contains("...");
+    }
 }

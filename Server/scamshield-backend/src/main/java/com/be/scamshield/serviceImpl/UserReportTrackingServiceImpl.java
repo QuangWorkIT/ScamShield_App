@@ -436,16 +436,10 @@ public class UserReportTrackingServiceImpl implements IUserReportTrackingService
     }
 
     private String resolveFullHash(Report report) {
-        if (report.getIpHash() != null && !report.getIpHash().isBlank()) {
-            return report.getIpHash();
-        }
-        if (report.getDeviceFingerprintHash() != null && !report.getDeviceFingerprintHash().isBlank()) {
-            return report.getDeviceFingerprintHash();
-        }
         // Generate reproducible SHA-256 hash from id and createdAt
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String raw = "RPT-" + report.getId() + "-" + report.getCreatedAt();
+            String raw = "RPT-" + (report != null ? report.getId() : "") + "-" + (report != null ? report.getCreatedAt() : "");
             byte[] hash = digest.digest(raw.getBytes(StandardCharsets.UTF_8));
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
@@ -535,6 +529,12 @@ public class UserReportTrackingServiceImpl implements IUserReportTrackingService
 
     private String escapeCsv(String value) {
         if (value == null) return "\"\"";
+        if (!value.isEmpty()) {
+            char firstChar = value.charAt(0);
+            if (firstChar == '=' || firstChar == '+' || firstChar == '-' || firstChar == '@' || firstChar == '\t' || firstChar == '\r') {
+                value = "'" + value;
+            }
+        }
         return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 

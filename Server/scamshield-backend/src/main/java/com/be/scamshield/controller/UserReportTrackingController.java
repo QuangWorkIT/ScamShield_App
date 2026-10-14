@@ -15,12 +15,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/user/reports")
@@ -28,6 +31,18 @@ import java.util.List;
 @Tag(name = "User Report Tracking", description = "API theo dõi tiến trình và thống kê các báo cáo lừa đảo do người dùng gửi")
 @SecurityRequirement(name = "bearerAuth")
 public class UserReportTrackingController {
+
+    private static final Set<String> ALLOWED_SORT_PROPERTIES = Set.of(
+            "id",
+            "createdAt",
+            "updatedAt",
+            "status",
+            "reportedMessage",
+            "description",
+            "priorityScore",
+            "reportCountSignal",
+            "regionCode"
+    );
 
     private final IUserReportTrackingService reportTrackingService;
 
@@ -70,12 +85,23 @@ public class UserReportTrackingController {
 
         ensureAuthenticated(userPrincipal);
 
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page index must not be less than zero");
+        }
+        if (size < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page size must not be less than one");
+        }
+        int cappedSize = Math.min(size, 100);
+
         String[] sortParams = sort.split(",");
-        Sort.Direction direction = (sortParams.length > 1 && "asc".equalsIgnoreCase(sortParams[1]))
+        Sort.Direction direction = (sortParams.length > 1 && "asc".equalsIgnoreCase(sortParams[1].trim()))
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;
         String sortProperty = sortParams[0].trim();
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortProperty));
+        if (!ALLOWED_SORT_PROPERTIES.contains(sortProperty)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported sort field: " + sortProperty);
+        }
+        Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(direction, sortProperty));
 
         PaginatedResponse<TrackingReportResponse> reports = reportTrackingService.getTrackingReports(
                 userPrincipal.getId(), search, status, categoryId, days, pageable);

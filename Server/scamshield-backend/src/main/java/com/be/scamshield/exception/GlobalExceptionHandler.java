@@ -105,6 +105,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<BaseResponse<Object>> handleResponseStatusException(org.springframework.web.server.ResponseStatusException ex) {
+        BaseResponse<Object> response = new BaseResponse<>(false, ex.getReason() != null ? ex.getReason() : ex.getMessage(), null);
+        return new ResponseEntity<>(response, ex.getStatusCode());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<BaseResponse<Object>> handleGlobalException(Exception ex) {
         ex.printStackTrace(); // Keep this for server logs

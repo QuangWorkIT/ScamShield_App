@@ -18,9 +18,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import org.mockito.ArgumentCaptor;
+
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -32,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SecurityConfig.class, JwtAuthenticationEntryPoint.class, CustomAccessDeniedHandler.class})
 class UserReportTrackingControllerTest {
 
-    private static final String BASE_URL = "/api/v1/user/reports";
+    private static final String BASE_URL = "/api/user/reports";
 
     @MockitoBean
     private IUserReportTrackingService reportTrackingService;
@@ -179,5 +182,45 @@ class UserReportTrackingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.data[0].code").value("IMPERSONATION"));
+    }
+
+    @Test
+    void getTrackingReportsRejectsNegativePageWithBadRequest() throws Exception {
+        mvc.perform(get(BASE_URL + "/tracking")
+                        .with(authentication(auth))
+                        .param("page", "-1"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTrackingReportsRejectsZeroOrNegativeSizeWithBadRequest() throws Exception {
+        mvc.perform(get(BASE_URL + "/tracking")
+                        .with(authentication(auth))
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTrackingReportsRejectsUnsupportedSortFieldWithBadRequest() throws Exception {
+        mvc.perform(get(BASE_URL + "/tracking")
+                        .with(authentication(auth))
+                        .param("sort", "unsupportedProperty,desc"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTrackingReportsCapsPageSizeAt100() throws Exception {
+        ArgumentCaptor<org.springframework.data.domain.Pageable> pageableCaptor =
+                ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+
+        when(reportTrackingService.getTrackingReports(eq(1L), any(), any(), any(), any(), pageableCaptor.capture()))
+                .thenReturn(new PaginatedResponse<>());
+
+        mvc.perform(get(BASE_URL + "/tracking")
+                        .with(authentication(auth))
+                        .param("size", "200"))
+                .andExpect(status().isOk());
+
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(100);
     }
 }
