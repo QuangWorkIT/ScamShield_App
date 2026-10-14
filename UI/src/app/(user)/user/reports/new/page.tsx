@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ShieldPlus } from "@phosphor-icons/react"
+import { toast } from "react-toastify"
 import { ReportForm } from "@/components/features/report/report-form"
 import { RecentReportsTable } from "@/components/features/report/recent-reports-table"
 import {
   MOCK_RECENT_REPORTS,
   submitScamReport,
+  getMyReports,
 } from "@/features/report/services/report.service"
 import {
   CreateReportPayload,
@@ -18,21 +20,40 @@ export default function UserReportsNewPage() {
     useState<RecentReportItem[]>(MOCK_RECENT_REPORTS)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  useEffect(() => {
+    async function loadReports() {
+      try {
+        const data = await getMyReports()
+        if (data && data.length > 0) {
+          setReports(data)
+        }
+      } catch (err) {
+        // Fallback to initial mock reports
+      }
+    }
+    loadReports()
+  }, [])
+
   const handleSubmit = async (payload: CreateReportPayload) => {
     setIsSubmitting(true)
     try {
       const res = await submitScamReport(payload)
-      const newReport: RecentReportItem = {
-        id: res.reportId,
-        targetValue: payload.targetIdentifier,
-        targetType: payload.threatType,
-        category: payload.category,
-        submittedDate: "Vừa xong",
-        evidenceCount: payload.attachments.length,
-        status: "PENDING",
-        rewardPoints: 0,
+      if (res.success) {
+        toast.success(res.message || "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)")
+        const newReport: RecentReportItem = {
+          id: res.reportId,
+          targetValue: payload.targetIdentifier,
+          targetType: payload.threatType,
+          category: payload.category,
+          submittedDate: "Vừa xong",
+          evidenceCount: payload.attachments.length,
+          status: "PENDING",
+          rewardPoints: 50,
+        }
+        setReports((prev) => [newReport, ...prev])
       }
-      setReports((prev) => [newReport, ...prev])
+    } catch (err) {
+      toast.error("Không thể gửi báo cáo lừa đảo. Vui lòng thử lại!")
     } finally {
       setIsSubmitting(false)
     }
