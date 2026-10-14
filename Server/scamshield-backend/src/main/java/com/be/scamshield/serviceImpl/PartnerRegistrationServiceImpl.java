@@ -74,7 +74,9 @@ public class PartnerRegistrationServiceImpl implements IPartnerRegistrationServi
             throw duplicateRegistration();
         }
 
-        List<String> domains = normalizeValues(request.getOfficialDomains(), this::normalizeDomain);
+        String domain = normalizeSingleValue(request.getOfficialDomains(), this::normalizeDomain);
+        String hotline = normalizeSingleValue(request.getOfficialHotlines(), value -> normalizePhone(value, 6));
+        String smsBrandName = normalizeSingleValue(request.getSmsBrandNames(), this::normalizeBrandName);
         String email = contactVerificationService.normalizeEmail(request.getCorporateEmail());
 
         requireFiles(businessLicenseFiles, "Cần giấy phép đăng ký kinh doanh / giấy phép hoạt động");
@@ -116,9 +118,9 @@ public class PartnerRegistrationServiceImpl implements IPartnerRegistrationServi
                 .verificationStatus(PartnerVerificationStatus.PENDING)
                 .createdAt(now)
                 .updatedAt(now)
-                .officialDomains(domains)
-                .officialHotlines(normalizeValues(request.getOfficialHotlines(), value -> normalizePhone(value, 6)))
-                .smsBrandNames(normalizeValues(request.getSmsBrandNames(), this::normalizeBrandName))
+                .officialDomain(domain)
+                .officialHotline(hotline)
+                .smsBrandName(smsBrandName)
                 .build();
 
         if (userRepository.existsByEmailIgnoreCase(email)) {
@@ -178,8 +180,11 @@ public class PartnerRegistrationServiceImpl implements IPartnerRegistrationServi
         return new RegistrationConflictException("Mã số thuế / mã số doanh nghiệp đã có hồ sơ đăng ký");
     }
 
-    private List<String> normalizeValues(List<String> values, Function<String, String> normalizer) {
-        return values.stream().map(normalizer).distinct().toList();
+    private String normalizeSingleValue(List<String> values, Function<String, String> normalizer) {
+        if (values == null || values.size() != 1) {
+            throw new BadRequestException("Mỗi hồ sơ chỉ được đăng ký một tên miền, một hotline và một SMS Brandname");
+        }
+        return normalizer.apply(values.getFirst());
     }
 
     private String normalizeDomain(String value) {

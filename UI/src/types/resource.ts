@@ -29,3 +29,47 @@ export interface PaginatedBlacklistResponse {
   hasNext: boolean
   hasPrevious: boolean
 }
+
+export interface VerifiedWhitelistIndicator {
+  id: number
+  resourceType: string
+  value: string
+  verifiedAt: string | null
+}
+
+export interface WhitelistResource {
+  id: number
+  name: string
+  brandName: string
+  partnerType: string
+  taxId: string | null
+  legalRepresentative: string | null
+  officialHotlines: string[]
+  officialDomains: string[]
+  smsBrandNames: string[]
+  verifiedIndicators: VerifiedWhitelistIndicator[]
+  verifiedAt: string | null
+}
+
+export interface WhitelistResourceFilterRequest {
+  page?: number
+  size?: number
+  keyword?: string
+  sortBy?: "newest" | "name"
+}
+
+export interface PaginatedWhitelistResponse {
+  data: WhitelistResource[]
+  currentPage: number
+  totalItems: number
+  totalPages: number
+  pageSize: number
+  hasNext: boolean
+  hasPrevious: boolean
+}
+
+export interface WhitelistApiResponse {
+  isSuccess: boolean
+  message: string
+  data: PaginatedWhitelistResponse
+}

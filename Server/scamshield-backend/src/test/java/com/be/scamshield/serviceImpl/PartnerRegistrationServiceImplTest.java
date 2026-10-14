@@ -95,9 +95,9 @@ class PartnerRegistrationServiceImplTest {
 
         request.setRepresentativeNameAndTitle(" Trần Quốc Huy - Giám đốc ");
         request.setContactPhone("+84 912 345 678");
-        request.setOfficialDomains(List.of("Example.com.vn", "example.com.vn", "app.example.com.vn"));
-        request.setOfficialHotlines(List.of("1900 545413", "1900545413"));
-        request.setSmsBrandNames(List.of("Example", "EXAMPLE"));
+        request.setOfficialDomains(List.of("Example.com.vn"));
+        request.setOfficialHotlines(List.of("1900 545413"));
+        request.setSmsBrandNames(List.of("Example"));
         request.setLegalRepresentative(true);
         request.setAgreeTerms(true);
         files = List.of(new MockMultipartFile("file", "proof.pdf", "application/pdf",
@@ -121,9 +121,9 @@ class PartnerRegistrationServiceImplTest {
         assertThat(registration.getValue().getLegalName()).isEqualTo("Công ty Example");
         assertThat(registration.getValue().getCorporateEmail()).isEqualTo("contact@example.com.vn");
         assertThat(registration.getValue().getContactPhone()).isEqualTo("0912345678");
-        assertThat(registration.getValue().getOfficialDomains()).containsExactly("example.com.vn", "app.example.com.vn");
-        assertThat(registration.getValue().getOfficialHotlines()).containsExactly("1900545413");
-        assertThat(registration.getValue().getSmsBrandNames()).containsExactly("EXAMPLE");
+        assertThat(registration.getValue().getOfficialDomain()).isEqualTo("example.com.vn");
+        assertThat(registration.getValue().getOfficialHotline()).isEqualTo("1900545413");
+        assertThat(registration.getValue().getSmsBrandName()).isEqualTo("EXAMPLE");
         assertThat(registration.getValue().getUser().getId()).isEqualTo(7L);
         assertThat(registration.getValue().getUser().getPasswordHash()).isEqualTo("encoded-password");
         assertThat(registration.getValue().getUser().getStatus()).isEqualTo(UserStatus.INACTIVE.name());
@@ -178,7 +178,7 @@ class PartnerRegistrationServiceImplTest {
         ArgumentCaptor<PartnerProfile> registration = ArgumentCaptor.forClass(PartnerProfile.class);
         verify(profileRepository).saveAndFlush(registration.capture());
         assertThat(registration.getValue().getCorporateEmail()).isEqualTo(email);
-        assertThat(registration.getValue().getOfficialDomains()).contains("example.com.vn");
+        assertThat(registration.getValue().getOfficialDomain()).isEqualTo("example.com.vn");
     }
 
     @ParameterizedTest
@@ -186,6 +186,14 @@ class PartnerRegistrationServiceImplTest {
     void rejectsUrlsAndInvalidHostnames(String domain) {
         request.setOfficialDomains(List.of(domain));
         assertThatThrownBy(() -> service.register(request, files, files, null)).isInstanceOf(BadRequestException.class);
+        assertNoWrites();
+    }
+
+    @Test
+    void rejectsMultipleOfficialValuesForOneProfile() {
+        request.setOfficialDomains(List.of("example.com.vn", "app.example.com.vn"));
+        assertThatThrownBy(() -> service.register(request, files, files, null))
+                .isInstanceOf(BadRequestException.class);
         assertNoWrites();
     }
 

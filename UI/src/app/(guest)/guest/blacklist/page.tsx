@@ -31,7 +31,7 @@ import {
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import { resourceService } from "@/features/resources/services/resource.service"
-import { BlackItem } from "@/types/resource"
+import { BlackItem, WhitelistResource } from "@/types/resource"
 
 type TabType = "blacklist" | "whitelist"
 type CategoryFilter = "all" | "phone" | "website" | "bank" | "sms"
@@ -58,110 +58,48 @@ interface WhitelistItem {
   securityCert?: string
 }
 
-const WHITELIST_DATA: WhitelistItem[] = [
-  {
-    id: "wl-viettel",
-    name: "Tập đoàn Viễn thông Viettel",
-    category: "phone",
-    categoryLabel: "VIỄN THÔNG QUỐC GIA",
+function toWhitelistItem(resource: WhitelistResource): WhitelistItem {
+  const type = resource.verifiedIndicators[0]?.resourceType?.toUpperCase()
+  const category =
+    type === "PHONE"
+      ? "phone"
+      : type === "BANK_ACCOUNT"
+        ? "bank"
+        : type === "SMS"
+          ? "sms"
+          : "website"
+  const identifier =
+    resource.smsBrandNames[0] ||
+    resource.verifiedIndicators[0]?.value ||
+    resource.brandName
+
+  return {
+    id: `WL-${resource.id}`,
+    name: resource.name,
+    category,
+    categoryLabel:
+      resource.partnerType === "BUSINESS"
+        ? "DOANH NGHIỆP"
+        : resource.partnerType,
     description:
-      "Tổng Công ty Viễn thông Viettel - Chi nhánh Tập đoàn Công nghiệp - Viễn thông Quân đội.",
-    authority: "Cấp phép: Bộ TT&TT",
-    hotline: "1800 8098 / 198",
+      resource.brandName !== resource.name
+        ? `Thương hiệu: ${resource.brandName}`
+        : "Đơn vị đã xác minh",
+    authority: "Đối tác đã xác minh",
+    hotline: resource.officialHotlines.join(" / ") || "Chưa cập nhật",
     hotlineLabel: "Hotline chính thức",
-    website: "vietteltelecom.vn",
-    websiteLabel: "Website duy nhất",
-    identifierLabel: "SMS Brandname",
-    identifierValue: "VIETTEL",
-    identifierColor: "text-emerald-700 dark:text-emerald-400",
-    verificationBadge: "Định danh xác thực",
-    verifiedAt: "15/01/2026",
-    taxId: "0100109106",
-    legalRepresentative: "Tập đoàn Công nghiệp - Viễn thông Quân đội",
-    securityCert: "NCSC Vietnam Trusted Partner 2026",
-  },
-  {
-    id: "wl-dvc",
-    name: "Cổng Dịch vụ công Quốc gia",
-    category: "website",
-    categoryLabel: "CỔNG DỊCH VỤ CÔNG",
-    description:
-      "Hệ thống đầu mối điện tử hỗ trợ công dân, doanh nghiệp thực hiện thủ tục hành chính trực tuyến.",
-    authority: "Chứng thư: Ban Cơ yếu CP",
-    hotline: "1800 1096",
-    hotlineLabel: "Hotline hỗ trợ",
-    website: "dichvucong.gov.vn",
-    websiteLabel: "Website chính thức",
-    identifierLabel: "Đơn vị chủ quản",
-    identifierValue: "Văn phòng Chính phủ",
-    verificationBadge: "Tên miền .gov.vn",
-    verifiedAt: "01/01/2026",
-    taxId: "Cơ quan hành chính nhà nước",
-    legalRepresentative: "Văn phòng Chính phủ nước CHXHCN Việt Nam",
-    securityCert: "Ban Cơ yếu Chính phủ - SHA-256 RSA",
-  },
-  {
-    id: "wl-vcb",
-    name: "Ngân hàng Vietcombank",
-    category: "bank",
-    categoryLabel: "NGÂN HÀNG TMCP",
-    description:
-      "Ngân hàng Thương mại Cổ phần Ngoại thương Việt Nam (VCB).",
-    authority: "Cấp phép: NHNN Việt Nam",
-    hotline: "1900 545413",
-    hotlineLabel: "Tổng đài 24/7",
-    website: "vietcombank.com.vn",
-    websiteLabel: "Domain cổng",
-    identifierLabel: "Brandname SMS",
-    identifierValue: "Vietcombank",
-    identifierColor: "text-emerald-700 dark:text-emerald-400",
-    verificationBadge: "Bảo mật EV SSL",
-    verifiedAt: "10/02/2026",
-    taxId: "0100112437",
-    legalRepresentative: "Ngân hàng TMCP Ngoại thương Việt Nam",
-    securityCert: "DigiCert Extended Validation TLS SHA256",
-  },
-  {
-    id: "wl-a05",
-    name: "Bộ Công An (Cục An ninh mạng A05)",
-    category: "phone",
-    categoryLabel: "CƠ QUAN AN NINH",
-    description:
-      "Cục An ninh mạng và phòng, chống tội phạm sử dụng công nghệ cao.",
-    authority: "Cơ quan Trung ương",
-    hotline: "069.234.3640",
-    hotlineLabel: "Đường dây nóng tội phạm",
-    website: "bocongan.gov.vn",
-    websiteLabel: "Cổng thông tin điện tử",
-    identifierLabel: "Trực ban 24/7",
-    identifierValue: "a05@bocongan.gov.vn",
-    verificationBadge: "Kênh tiếp nhận chính thức",
-    verifiedAt: "01/01/2026",
-    taxId: "Lực lượng Công an Nhân dân",
-    legalRepresentative: "Bộ Công An",
-    securityCert: "Chính phủ bảo hộ trực tiếp",
-  },
-  {
-    id: "wl-ncsc",
-    name: "Trung tâm NCSC Quốc gia",
-    category: "website",
-    categoryLabel: "AN TOÀN THÔNG TIN",
-    description:
-      "Trung tâm Giám sát an toàn không gian mạng quốc gia trực thuộc Cục ATTT.",
-    authority: "Bộ Thông tin & Truyền thông",
-    hotline: "024.3209.6789",
-    hotlineLabel: "Hotline kỹ thuật",
-    website: "khonggianmang.vn",
-    websiteLabel: "Cổng giám sát an toàn",
-    identifierLabel: "Email sự cố mạng",
-    identifierValue: "ais@mic.gov.vn",
-    verificationBadge: "Tín nhiệm mạng NCSC",
-    verifiedAt: "05/01/2026",
-    taxId: "Đơn vị sự nghiệp công lập",
-    legalRepresentative: "Cục An toàn Thông tin - Bộ TT&TT",
-    securityCert: "NCSC Cyber Trust Seal cấp cao",
-  },
-]
+    website: resource.officialDomains.join(" / ") || "Chưa cập nhật",
+    websiteLabel: "Tên miền chính thức",
+    identifierLabel: resource.smsBrandNames.length
+      ? "SMS Brandname"
+      : "Định danh đã xác minh",
+    identifierValue: identifier,
+    verificationBadge: "Đã xác minh",
+    verifiedAt: formatDate(resource.verifiedAt ?? undefined),
+    taxId: resource.taxId ?? undefined,
+    legalRepresentative: resource.legalRepresentative ?? undefined,
+  }
+}
 
 function formatDate(isoString?: string): string {
   if (!isoString) return "—"
@@ -236,7 +174,8 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
 export default function GuestBlacklistPage() {
   const [activeTab, setActiveTab] = useState<TabType>("blacklist")
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all")
+  const [selectedCategory, setSelectedCategory] =
+    useState<CategoryFilter>("all")
   const [sortOrder, setSortOrder] = useState<SortOrder>("newest")
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -247,15 +186,23 @@ export default function GuestBlacklistPage() {
   const [totalRecords, setTotalRecords] = useState<number>(0)
   const [totalPages, setTotalPages] = useState<number>(1)
   const [hasNextPage, setHasNextPage] = useState<boolean>(false)
-  const [hasPrevPage, setHasPrevPage] = useState<boolean>(false)
+  const [whitelistData, setWhitelistData] = useState<WhitelistItem[]>([])
+  const [whitelistLoading, setWhitelistLoading] = useState(false)
+  const [whitelistError, setWhitelistError] = useState<string | null>(null)
+  const [whitelistTotalRecords, setWhitelistTotalRecords] = useState(0)
+  const [whitelistTotalPages, setWhitelistTotalPages] = useState(1)
 
   // Modals & Details
-  const [selectedItemForDetail, setSelectedItemForDetail] = useState<WhitelistItem | null>(null)
-  const [selectedBlacklistItem, setSelectedBlacklistItem] = useState<BlackItem | null>(null)
+  const [selectedItemForDetail, setSelectedItemForDetail] =
+    useState<WhitelistItem | null>(null)
+  const [selectedBlacklistItem, setSelectedBlacklistItem] =
+    useState<BlackItem | null>(null)
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [reportSubmitted, setReportSubmitted] = useState(false)
   const [newReportTarget, setNewReportTarget] = useState("")
-  const [newReportType, setNewReportType] = useState<"phone" | "website" | "bank" | "sms">("phone")
+  const [newReportType, setNewReportType] = useState<
+    "phone" | "website" | "bank" | "sms"
+  >("phone")
   const [newReportDesc, setNewReportDesc] = useState("")
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
@@ -300,15 +247,20 @@ export default function GuestBlacklistPage() {
           setTotalRecords(res.totalItems || 0)
           setTotalPages(Math.max(1, res.totalPages || 1))
           setHasNextPage(Boolean(res.hasNext))
-          setHasPrevPage(Boolean(res.hasPrevious))
         }
       } catch (err: unknown) {
-        if (axios.isCancel(err) || (err as { name?: string })?.name === "CanceledError") {
+        if (
+          axios.isCancel(err) ||
+          (err as { name?: string })?.name === "CanceledError"
+        ) {
           return
         }
         if (isMounted) {
           if (axios.isAxiosError(err)) {
-            setError(err.response?.data?.message || "Không thể kết nối đến máy chủ danh sách đen")
+            setError(
+              err.response?.data?.message ||
+                "Không thể kết nối đến máy chủ danh sách đen"
+            )
           } else {
             setError("Đã xảy ra lỗi khi tải dữ liệu")
           }
@@ -334,6 +286,53 @@ export default function GuestBlacklistPage() {
     }
   }, [activeTab, currentPage, searchQuery, selectedCategory])
 
+  useEffect(() => {
+    if (activeTab !== "whitelist") return
+
+    let isMounted = true
+    const controller = new AbortController()
+    const timeoutId = setTimeout(
+      async () => {
+        setWhitelistLoading(true)
+        setWhitelistError(null)
+        try {
+          const result = await resourceService.getWhiteList(
+            {
+              page: currentPage - 1,
+              size: 5,
+              keyword: searchQuery,
+              sortBy: sortOrder === "name" ? "name" : "newest",
+            },
+            controller.signal
+          )
+          if (isMounted) {
+            setWhitelistData(result.data.map(toWhitelistItem))
+            setWhitelistTotalRecords(result.totalItems)
+            setWhitelistTotalPages(Math.max(1, result.totalPages))
+          }
+        } catch (err: unknown) {
+          if (axios.isCancel(err)) return
+          if (isMounted) {
+            setWhitelistError(
+              axios.isAxiosError(err)
+                ? err.response?.data?.message || "Không thể tải danh sách trắng"
+                : "Đã xảy ra lỗi khi tải danh sách trắng"
+            )
+          }
+        } finally {
+          if (isMounted) setWhitelistLoading(false)
+        }
+      },
+      searchQuery.trim() ? 350 : 0
+    )
+
+    return () => {
+      isMounted = false
+      clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [activeTab, currentPage, searchQuery, sortOrder])
+
   // Sort displayed Blacklist data
   const displayedBlacklist = useMemo(() => {
     const list = [...blacklistData]
@@ -345,28 +344,10 @@ export default function GuestBlacklistPage() {
     return list
   }, [blacklistData, sortOrder])
 
-  // Filter Whitelist (Tab 2)
-  const filteredWhitelist = useMemo(() => {
-    let result = WHITELIST_DATA.filter((item) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.authority.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.hotline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.website.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.identifierValue.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchesSearch
-    })
-
-    if (sortOrder === "name") {
-      result = [...result].sort((a, b) => a.name.localeCompare(b.name))
-    }
-
-    return result
-  }, [searchQuery, sortOrder])
-
   const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
+    const pageCount =
+      activeTab === "whitelist" ? whitelistTotalPages : totalPages
+    if (newPage >= 1 && newPage <= pageCount) {
       setCurrentPage(newPage)
       if (typeof window !== "undefined") {
         window.scrollTo({ top: 380, behavior: "smooth" })
@@ -401,7 +382,9 @@ export default function GuestBlacklistPage() {
               Tra cứu tài nguyên
             </h1>
             <p className="text-base leading-relaxed text-[#45464D] sm:text-lg dark:text-muted-foreground">
-              Tra cứu tức thì danh bạ cảnh báo các đầu số, tên miền lừa đảo (Blacklist) và danh sách liên lạc, website chính thống đã được xác thực.
+              Tra cứu tức thì danh bạ cảnh báo các đầu số, tên miền lừa đảo
+              (Blacklist) và danh sách liên lạc, website chính thống đã được xác
+              thực.
             </p>
           </div>
         </div>
@@ -449,6 +432,7 @@ export default function GuestBlacklistPage() {
                 onClick={() => {
                   setActiveTab("whitelist")
                   setCurrentPage(1)
+                  setWhitelistLoading(true)
                   if (sortOrder === "reports") {
                     setSortOrder("newest")
                   }
@@ -471,7 +455,7 @@ export default function GuestBlacklistPage() {
                 />
                 <span>Danh Sách Trắng (Whitelist)</span>
                 <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold tracking-wide text-[#047857] dark:bg-emerald-950/40 dark:text-emerald-400">
-                  {WHITELIST_DATA.length}
+                  {whitelistTotalRecords.toLocaleString()}
                 </span>
               </button>
             </div>
@@ -481,7 +465,8 @@ export default function GuestBlacklistPage() {
               {activeTab === "whitelist" ? (
                 <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
                   <CheckCircleIcon size={14} weight="fill" />
-                  Dữ liệu định danh chính thống từ cơ quan nhà nước & tổ chức uy tín
+                  Dữ liệu định danh chính thống từ cơ quan nhà nước & tổ chức uy
+                  tín
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
@@ -569,7 +554,10 @@ export default function GuestBlacklistPage() {
               <div className="relative">
                 <select
                   value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                  onChange={(e) => {
+                    setSortOrder(e.target.value as SortOrder)
+                    setCurrentPage(1)
+                  }}
                   className="appearance-none rounded-lg border border-[#E2E7FF] bg-white py-1.5 pr-8 pl-3 text-xs font-medium text-[#131B2E] focus:border-primary focus:outline-hidden dark:border-border dark:bg-background dark:text-foreground"
                 >
                   <option value="newest">Mới cập nhật nhất</option>
@@ -595,11 +583,11 @@ export default function GuestBlacklistPage() {
                 {[1, 2, 3, 4, 5].map((idx) => (
                   <div
                     key={idx}
-                    className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-xs animate-pulse lg:flex-row lg:items-center dark:border-border dark:bg-card"
+                    className="flex animate-pulse flex-col justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-xs lg:flex-row lg:items-center dark:border-border dark:bg-card"
                   >
-                    <div className="flex items-start gap-3.5 w-full">
-                      <div className="size-11 rounded-xl bg-slate-200 dark:bg-muted shrink-0" />
-                      <div className="space-y-2 flex-1">
+                    <div className="flex w-full items-start gap-3.5">
+                      <div className="size-11 shrink-0 rounded-xl bg-slate-200 dark:bg-muted" />
+                      <div className="flex-1 space-y-2">
                         <div className="h-4 w-48 rounded bg-slate-200 dark:bg-muted" />
                         <div className="h-3 w-3/4 rounded bg-slate-100 dark:bg-muted/60" />
                         <div className="h-3 w-1/3 rounded bg-slate-100 dark:bg-muted/60" />
@@ -610,7 +598,10 @@ export default function GuestBlacklistPage() {
               </div>
             ) : error ? (
               <div className="rounded-2xl border border-dashed border-red-200 bg-red-50/50 p-12 text-center dark:border-destructive/30 dark:bg-destructive/10">
-                <WarningCircleIcon size={48} className="mx-auto text-destructive opacity-80" />
+                <WarningCircleIcon
+                  size={48}
+                  className="mx-auto text-destructive opacity-80"
+                />
                 <h3 className="mt-3 text-base font-bold text-destructive">
                   {error}
                 </h3>
@@ -627,7 +618,10 @@ export default function GuestBlacklistPage() {
               </div>
             ) : displayedBlacklist.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#C6C6CE] bg-white p-12 text-center dark:border-border dark:bg-card">
-                <WarningCircleIcon size={48} className="mx-auto text-muted-foreground opacity-40" />
+                <WarningCircleIcon
+                  size={48}
+                  className="mx-auto text-muted-foreground opacity-40"
+                />
                 <h3 className="mt-3 text-base font-bold text-[#131B2E] dark:text-foreground">
                   Không tìm thấy cảnh báo nào phù hợp
                 </h3>
@@ -678,11 +672,12 @@ export default function GuestBlacklistPage() {
                         <span
                           className={cn(
                             "rounded px-2 py-0.5 text-[11px] font-bold tracking-wide uppercase",
-                            item.severity === "CRITICAL" || item.severity === "URGENT"
+                            item.severity === "CRITICAL" ||
+                              item.severity === "URGENT"
                               ? "bg-[#B31D1D] text-white"
                               : item.severity === "HIGH"
-                              ? "bg-[#FFE4E6] text-[#9F1239] dark:bg-rose-950/50 dark:text-rose-300"
-                              : "bg-[#FEF3C7] text-[#92400E] dark:bg-amber-950/50 dark:text-amber-300"
+                                ? "bg-[#FFE4E6] text-[#9F1239] dark:bg-rose-950/50 dark:text-rose-300"
+                                : "bg-[#FEF3C7] text-[#92400E] dark:bg-amber-950/50 dark:text-amber-300"
                           )}
                         >
                           {item.severityLabel || item.severity}
@@ -702,7 +697,10 @@ export default function GuestBlacklistPage() {
                       {/* Line 3: Meta Statistics Row */}
                       <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-[#64748B] dark:text-slate-400">
                         <span className="inline-flex items-center gap-1.5">
-                          <EyeIcon size={14} className="text-[#64748B] dark:text-slate-400" />
+                          <EyeIcon
+                            size={14}
+                            className="text-[#64748B] dark:text-slate-400"
+                          />
                           <span className="font-semibold text-[#1E293B] dark:text-slate-200">
                             {(item.warningCount ?? 0).toLocaleString()}
                           </span>{" "}
@@ -710,8 +708,12 @@ export default function GuestBlacklistPage() {
                         </span>
 
                         <span className="inline-flex items-center gap-1.5">
-                          <CalendarBlankIcon size={14} className="text-[#64748B] dark:text-slate-400" />
-                          Cập nhật: {formatDate(item.updatedAt || item.confirmedAt)}
+                          <CalendarBlankIcon
+                            size={14}
+                            className="text-[#64748B] dark:text-slate-400"
+                          />
+                          Cập nhật:{" "}
+                          {formatDate(item.updatedAt || item.confirmedAt)}
                         </span>
                       </div>
                     </div>
@@ -741,7 +743,8 @@ export default function GuestBlacklistPage() {
                 </span>
                 <span className="mx-2 text-slate-400">•</span>
                 <span>
-                  Trang {currentPage} / {Math.max(1, totalPages).toLocaleString()}
+                  Trang {currentPage} /{" "}
+                  {Math.max(1, totalPages).toLocaleString()}
                 </span>
               </div>
 
@@ -770,7 +773,7 @@ export default function GuestBlacklistPage() {
                         disabled={isLoading}
                         onClick={() => handlePageChange(Number(p))}
                         className={cn(
-                          "size-7 rounded-md flex items-center justify-center font-bold text-xs transition-colors",
+                          "flex size-7 items-center justify-center rounded-md text-xs font-bold transition-colors",
                           currentPage === p
                             ? "bg-[#0B132B] text-white dark:bg-foreground dark:text-background"
                             : "text-slate-700 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-muted"
@@ -783,9 +786,11 @@ export default function GuestBlacklistPage() {
 
                   <button
                     type="button"
-                    disabled={currentPage >= totalPages || !hasNextPage || isLoading}
+                    disabled={
+                      currentPage >= totalPages || !hasNextPage || isLoading
+                    }
                     onClick={() => handlePageChange(currentPage + 1)}
-                    className="rounded px-2.5 py-1 text-slate-700 hover:text-slate-900 disabled:opacity-40 disabled:hover:text-slate-700 dark:text-slate-300 dark:hover:text-white font-medium"
+                    className="rounded px-2.5 py-1 font-medium text-slate-700 hover:text-slate-900 disabled:opacity-40 disabled:hover:text-slate-700 dark:text-slate-300 dark:hover:text-white"
                   >
                     Sau
                   </button>
@@ -809,11 +814,21 @@ export default function GuestBlacklistPage() {
             {/* Warning Alert Note */}
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-900 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
               <div className="flex items-start gap-2.5">
-                <InfoIcon size={18} weight="fill" className="mt-0.5 shrink-0 text-amber-600" />
+                <InfoIcon
+                  size={18}
+                  weight="fill"
+                  className="mt-0.5 shrink-0 text-amber-600"
+                />
                 <div className="space-y-1">
-                  <p className="font-bold">Lưu ý bảo mật từ Trung tâm Giám sát Không gian mạng:</p>
+                  <p className="font-bold">
+                    Lưu ý bảo mật từ Trung tâm Giám sát Không gian mạng:
+                  </p>
                   <p className="leading-relaxed">
-                    Không bao giờ cung cấp mã OTP, mật khẩu tài khoản ngân hàng hoặc chuyển tiền vào các số tài khoản cá nhân theo yêu cầu của người lạ qua điện thoại hoặc mạng xã hội. Nếu phát hiện dấu hiệu lừa đảo, hãy báo cáo ngay cho cơ quan chức năng hoặc gửi báo cáo tại ScamShield VN.
+                    Không bao giờ cung cấp mã OTP, mật khẩu tài khoản ngân hàng
+                    hoặc chuyển tiền vào các số tài khoản cá nhân theo yêu cầu
+                    của người lạ qua điện thoại hoặc mạng xã hội. Nếu phát hiện
+                    dấu hiệu lừa đảo, hãy báo cáo ngay cho cơ quan chức năng
+                    hoặc gửi báo cáo tại ScamShield VN.
                   </p>
                 </div>
               </div>
@@ -824,9 +839,23 @@ export default function GuestBlacklistPage() {
         {/* Content Section: TAB 2 - WHITELIST CONTENT */}
         {activeTab === "whitelist" && (
           <div className="space-y-4">
-            {filteredWhitelist.length === 0 ? (
+            {whitelistLoading ? (
+              <div className="rounded-xl border border-[#E2E7FF] bg-white p-8 text-center text-sm text-[#45464D] dark:border-border dark:bg-card dark:text-muted-foreground">
+                Đang tải danh sách...
+              </div>
+            ) : whitelistError ? (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-white p-8 text-center text-sm text-red-700 dark:border-destructive/30 dark:bg-card dark:text-destructive"
+              >
+                {whitelistError}
+              </div>
+            ) : whitelistData.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#C6C6CE] bg-white p-12 text-center dark:border-border dark:bg-card">
-                <ShieldCheckIcon size={48} className="mx-auto text-muted-foreground opacity-40" />
+                <ShieldCheckIcon
+                  size={48}
+                  className="mx-auto text-muted-foreground opacity-40"
+                />
                 <h3 className="mt-3 text-base font-bold text-[#131B2E] dark:text-foreground">
                   Không tìm thấy đơn vị nào phù hợp
                 </h3>
@@ -844,7 +873,7 @@ export default function GuestBlacklistPage() {
                 </button>
               </div>
             ) : (
-              filteredWhitelist.map((item) => (
+              whitelistData.map((item) => (
                 <div
                   key={item.id}
                   className="group flex flex-col justify-between gap-4 rounded-xl border border-[#E2E7FF] bg-white p-4 shadow-xs transition-all hover:border-[#CAD4FF] hover:shadow-md lg:flex-row lg:items-center dark:border-border dark:bg-card dark:hover:border-primary/40"
@@ -856,7 +885,8 @@ export default function GuestBlacklistPage() {
                         <BroadcastIcon size={20} weight="bold" />
                       ) : item.category === "bank" ? (
                         <CreditCardIcon size={20} weight="bold" />
-                      ) : item.category === "website" && item.authority.includes("Cơ yếu") ? (
+                      ) : item.category === "website" &&
+                        item.categoryLabel.includes("CƠ QUAN") ? (
                         <BuildingsIcon size={20} weight="bold" />
                       ) : (
                         <ShieldCheckIcon size={20} weight="bold" />
@@ -875,7 +905,11 @@ export default function GuestBlacklistPage() {
                         {item.description}
                       </p>
                       <div className="flex items-center gap-1.5 pt-1 text-[11px] font-bold text-[#45464D] dark:text-muted-foreground">
-                        <CertificateIcon size={14} weight="fill" className="text-emerald-600 dark:text-emerald-400" />
+                        <CertificateIcon
+                          size={14}
+                          weight="fill"
+                          className="text-emerald-600 dark:text-emerald-400"
+                        />
                         <span>{item.authority}</span>
                       </div>
                     </div>
@@ -911,7 +945,8 @@ export default function GuestBlacklistPage() {
                       <span
                         className={cn(
                           "block truncate text-sm font-bold",
-                          item.identifierColor || "text-[#131B2E] dark:text-foreground"
+                          item.identifierColor ||
+                            "text-[#131B2E] dark:text-foreground"
                         )}
                       >
                         {item.identifierValue}
@@ -937,6 +972,32 @@ export default function GuestBlacklistPage() {
               ))
             )}
 
+            {!whitelistLoading &&
+              !whitelistError &&
+              whitelistTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 pt-3 text-sm text-[#45464D] dark:text-muted-foreground">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    className="rounded-lg border border-[#E2E7FF] px-3 py-1.5 disabled:opacity-40 dark:border-border"
+                  >
+                    Trước
+                  </button>
+                  <span>
+                    Trang {currentPage} / {whitelistTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={currentPage >= whitelistTotalPages}
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    className="rounded-lg border border-[#E2E7FF] px-3 py-1.5 disabled:opacity-40 dark:border-border"
+                  >
+                    Tiếp
+                  </button>
+                </div>
+              )}
+
             {/* B2B Call-to-action Banner (Registration Whitelist) */}
             <div className="mt-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-[#CAD4FF] bg-[#E2E7FF] p-6 shadow-xs md:flex-row md:items-center dark:border-primary/20 dark:bg-primary/10">
               <div className="flex items-center gap-4">
@@ -948,7 +1009,8 @@ export default function GuestBlacklistPage() {
                     Đăng ký Whitelist Doanh Nghiệp & Đơn vị Chính thức
                   </h3>
                   <p className="mt-1 text-sm text-[#45464D] dark:text-muted-foreground">
-                    Bảo vệ thương hiệu, xác thực số hotline, SMS Brandname và tên miền chính thức để phòng tránh tội phạm mạng mạo danh.
+                    Bảo vệ thương hiệu, xác thực số hotline, SMS Brandname và
+                    tên miền chính thức để phòng tránh tội phạm mạng mạo danh.
                   </p>
                 </div>
               </div>
@@ -980,7 +1042,8 @@ export default function GuestBlacklistPage() {
                       Hồ Sơ Cảnh Báo Vi Phạm
                     </h3>
                     <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800 uppercase dark:bg-destructive/30 dark:text-rose-300">
-                      {selectedBlacklistItem.severityLabel || selectedBlacklistItem.severity}
+                      {selectedBlacklistItem.severityLabel ||
+                        selectedBlacklistItem.severity}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -1003,11 +1066,12 @@ export default function GuestBlacklistPage() {
               {/* Target Banner */}
               <div className="rounded-xl border border-rose-100 bg-[#FFF5F5] p-3.5 dark:border-destructive/20 dark:bg-destructive/10">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800 dark:text-rose-400">
+                  <span className="text-[11px] font-bold tracking-wider text-rose-800 uppercase dark:text-rose-400">
                     ĐỐI TƯỢNG BỊ TỐ CÁO
                   </span>
                   <span className="rounded bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-rose-700 shadow-xs dark:bg-card dark:text-rose-300">
-                    {(selectedBlacklistItem.warningCount ?? 0).toLocaleString()} lượt báo cáo
+                    {(selectedBlacklistItem.warningCount ?? 0).toLocaleString()}{" "}
+                    lượt báo cáo
                   </span>
                 </div>
                 <p className="mt-1 font-mono text-base font-bold text-[#BA1A1A] sm:text-lg dark:text-rose-400">
@@ -1030,7 +1094,8 @@ export default function GuestBlacklistPage() {
                     Mức độ cảnh báo
                   </span>
                   <span className="mt-0.5 block font-bold text-foreground">
-                    {selectedBlacklistItem.severityLabel || selectedBlacklistItem.severity}
+                    {selectedBlacklistItem.severityLabel ||
+                      selectedBlacklistItem.severity}
                   </span>
                 </div>
                 <div className="rounded-lg border border-border p-2.5">
@@ -1053,7 +1118,7 @@ export default function GuestBlacklistPage() {
 
               {/* Technical Blocking Evidence */}
               <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-border dark:bg-muted/40">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                <span className="block text-[10px] font-bold tracking-wider text-slate-600 uppercase dark:text-slate-400">
                   Trạng thái kiểm duyệt
                 </span>
                 <p className="mt-1 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
@@ -1115,14 +1180,18 @@ export default function GuestBlacklistPage() {
                   Đã gửi báo cáo thành công!
                 </h4>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Đội ngũ điều phối và kiểm duyệt ScamShield VN sẽ tiến hành thẩm định kỹ thuật và cập nhật vào danh sách cảnh báo.
+                  Đội ngũ điều phối và kiểm duyệt ScamShield VN sẽ tiến hành
+                  thẩm định kỹ thuật và cập nhật vào danh sách cảnh báo.
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleReportSubmit} className="mt-4 space-y-4 text-xs">
+              <form
+                onSubmit={handleReportSubmit}
+                className="mt-4 space-y-4 text-xs"
+              >
                 {/* Target Type Selector */}
                 <div>
-                  <label className="block font-semibold text-foreground mb-1.5">
+                  <label className="mb-1.5 block font-semibold text-foreground">
                     Loại hình vi phạm
                   </label>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1153,7 +1222,7 @@ export default function GuestBlacklistPage() {
 
                 {/* Target Value */}
                 <div>
-                  <label className="block font-semibold text-foreground mb-1.5">
+                  <label className="mb-1.5 block font-semibold text-foreground">
                     Thông tin đối tượng nghi vấn
                   </label>
                   <input
@@ -1168,7 +1237,7 @@ export default function GuestBlacklistPage() {
 
                 {/* Description */}
                 <div>
-                  <label className="block font-semibold text-foreground mb-1.5">
+                  <label className="mb-1.5 block font-semibold text-foreground">
                     Mô tả thủ đoạn / Bằng chứng
                   </label>
                   <textarea
@@ -1181,7 +1250,7 @@ export default function GuestBlacklistPage() {
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <div className="flex justify-end gap-2 border-t border-border pt-2">
                   <button
                     type="button"
                     onClick={() => setIsReportModalOpen(false)}
@@ -1249,7 +1318,7 @@ export default function GuestBlacklistPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-[#E2E7FF] p-2.5 dark:border-border">
                   <span className="block text-[10px] text-[#45464D] dark:text-muted-foreground">
-                    Cơ quan phê duyệt
+                    Trạng thái
                   </span>
                   <span className="mt-0.5 font-bold text-[#131B2E] dark:text-foreground">
                     {selectedItemForDetail.authority}
@@ -1276,7 +1345,7 @@ export default function GuestBlacklistPage() {
                     Chứng thư số bảo mật
                   </span>
                   <span className="mt-0.5 truncate font-bold text-[#131B2E] dark:text-foreground">
-                    {selectedItemForDetail.securityCert || "TLS Extended Validation"}
+                    {selectedItemForDetail.securityCert || "Chưa có thông tin"}
                   </span>
                 </div>
               </div>
@@ -1290,11 +1359,15 @@ export default function GuestBlacklistPage() {
                   <div className="flex items-center justify-between rounded-lg bg-emerald-50/70 px-3 py-2 text-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300">
                     <div className="flex items-center gap-2">
                       <PhoneCallIcon size={16} weight="bold" />
-                      <span className="font-mono font-bold">{selectedItemForDetail.hotline}</span>
+                      <span className="font-mono font-bold">
+                        {selectedItemForDetail.hotline}
+                      </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleCopy(selectedItemForDetail.hotline, "hotline")}
+                      onClick={() =>
+                        handleCopy(selectedItemForDetail.hotline, "hotline")
+                      }
                       className="inline-flex items-center gap-1 text-[11px] font-semibold hover:underline"
                     >
                       {copiedKey === "hotline" ? (
@@ -1312,11 +1385,15 @@ export default function GuestBlacklistPage() {
                   <div className="flex items-center justify-between rounded-lg bg-emerald-50/70 px-3 py-2 text-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300">
                     <div className="flex items-center gap-2">
                       <GlobeIcon size={16} weight="bold" />
-                      <span className="font-mono font-medium">{selectedItemForDetail.website}</span>
+                      <span className="font-mono font-medium">
+                        {selectedItemForDetail.website}
+                      </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleCopy(selectedItemForDetail.website, "website")}
+                      onClick={() =>
+                        handleCopy(selectedItemForDetail.website, "website")
+                      }
                       className="inline-flex items-center gap-1 text-[11px] font-semibold hover:underline"
                     >
                       {copiedKey === "website" ? (

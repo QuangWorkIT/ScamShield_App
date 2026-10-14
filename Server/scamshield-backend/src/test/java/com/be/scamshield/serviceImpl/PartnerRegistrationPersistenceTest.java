@@ -118,7 +118,7 @@ class PartnerRegistrationPersistenceTest {
         request.setPassword("Example123!");
         request.setRepresentativeNameAndTitle("Huy - Giám đốc");
         request.setContactPhone("0912345678");
-        request.setOfficialDomains(List.of("example.com.vn", "app.example.com.vn"));
+        request.setOfficialDomains(List.of("example.com.vn"));
         request.setOfficialHotlines(List.of("1900545413"));
         request.setSmsBrandNames(List.of("EXAMPLE"));
         request.setLegalRepresentative(true);
@@ -134,7 +134,8 @@ class PartnerRegistrationPersistenceTest {
         PartnerRegistrationResponse response = service.register(request, files, files, null);
         assertThat(profileRepository.findById(response.getRegistrationId())).isPresent();
         assertThat(documentRepository.count()).isEqualTo(2);
-        assertThat(jdbc.queryForObject("select count(*) from partner_profile_domains", Long.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select official_domain from partner_profiles where id = ?", String.class,
+                response.getRegistrationId())).isEqualTo("example.com.vn");
         byte[] stored = jdbc.queryForObject("select content from partner_documents where document_type = 'BUSINESS_LICENSE'", byte[].class);
         assertThat(stored).isEqualTo("%PDF-1.7\nproof".getBytes(StandardCharsets.US_ASCII));
         assertThat(userRepository.count()).isEqualTo(usersBefore + 1);
@@ -155,7 +156,9 @@ class PartnerRegistrationPersistenceTest {
             assertThat(profile.getPartnerType()).isEqualTo("BUSINESS");
             assertThat(profile.getVerificationStatus()).isEqualTo(PartnerVerificationStatus.PENDING);
             assertThat(profile.getVerifiedAt()).isNull();
-            assertThat(profile.getOfficialDomains()).containsExactlyInAnyOrder("example.com.vn", "app.example.com.vn");
+            assertThat(profile.getOfficialDomain()).isEqualTo("example.com.vn");
+            assertThat(profile.getOfficialHotline()).isEqualTo("1900545413");
+            assertThat(profile.getSmsBrandName()).isEqualTo("EXAMPLE");
             assertThat(documentRepository.findAll()).allSatisfy(document ->
                     assertThat(document.getPartner().getId()).isEqualTo(profile.getId()));
         });
@@ -180,16 +183,13 @@ class PartnerRegistrationPersistenceTest {
     }
 
     @Test
-    void evidencePersistenceFailureRollsBackApplicationAndAllLists() {
+    void evidencePersistenceFailureRollsBackApplication() {
         prepareVerification();
         doThrow(new IllegalStateException("evidence storage failed")).when(documentRepository).saveAll(any());
         assertThatThrownBy(() -> service.register(request, files, files, null)).isInstanceOf(IllegalStateException.class);
         assertThat(profileRepository.count()).isZero();
         assertThat(documentRepository.count()).isZero();
         assertThat(userRepository.count()).isZero();
-        assertThat(jdbc.queryForObject("select count(*) from partner_profile_domains", Long.class)).isZero();
-        assertThat(jdbc.queryForObject("select count(*) from partner_profile_hotlines", Long.class)).isZero();
-        assertThat(jdbc.queryForObject("select count(*) from partner_profile_brand_names", Long.class)).isZero();
         assertThat(verificationRepository.findAll().getFirst().getUsedAt()).isNull();
     }
 

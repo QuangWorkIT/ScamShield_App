@@ -56,15 +56,15 @@ public class RegisterPartnerRequest {
     private String contactPhone;
 
     @NotEmpty(message = "Cần ít nhất một tên miền chính thống")
-    @Size(max = 50, message = "Tối đa 50 tên miền")
+    @Size(max = 1, message = "Chỉ được đăng ký một tên miền chính thống")
     private List<@NotBlank(message = "Tên miền không được để trống") @Size(max = 253, message = "Tên miền tối đa 253 ký tự") String> officialDomains;
 
     @NotEmpty(message = "Cần ít nhất một hotline chính thống")
-    @Size(max = 50, message = "Tối đa 50 hotline")
+    @Size(max = 1, message = "Chỉ được đăng ký một hotline chính thống")
     private List<@NotBlank(message = "Hotline không được để trống") @Size(max = 30, message = "Hotline tối đa 30 ký tự") String> officialHotlines;
 
     @NotEmpty(message = "Cần ít nhất một SMS Brandname")
-    @Size(max = 50, message = "Tối đa 50 SMS Brandname")
+    @Size(max = 1, message = "Chỉ được đăng ký một SMS Brandname")
     private List<@NotBlank(message = "SMS Brandname không được để trống") @Size(max = 100, message = "SMS Brandname tối đa 100 ký tự") String> smsBrandNames;
 
     @NotNull(message = "Cần xác định người đăng ký có phải đại diện pháp luật không")
