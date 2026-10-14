@@ -54,10 +54,11 @@ class ResourceControllerTest {
                         .param("page", "1").param("size", "5")
                         .param("keyword", "0900").param("resourceType", "PHONE"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].id").value(3))
-                .andExpect(jsonPath("$.data[0].severity").value("HIGH"))
-                .andExpect(jsonPath("$.currentPage").value(1))
-                .andExpect(jsonPath("$.totalItems").value(12));
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.data[0].id").value(3))
+                .andExpect(jsonPath("$.data.data[0].severity").value("HIGH"))
+                .andExpect(jsonPath("$.data.currentPage").value(1))
+                .andExpect(jsonPath("$.data.totalItems").value(12));
 
         var captor = ArgumentCaptor.forClass(BlacklistResourceFilterRequest.class);
         verify(service).getBlackListResources(captor.capture());

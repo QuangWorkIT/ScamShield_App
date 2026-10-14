@@ -73,3 +73,10 @@ export interface WhitelistApiResponse {
   message: string
   data: PaginatedWhitelistResponse
 }
+
+export interface BlacklistApiResponse {
+  isSuccess: boolean
+  message: string
+  data: PaginatedBlacklistResponse
+}
+

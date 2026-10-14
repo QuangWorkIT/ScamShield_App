@@ -1,5 +1,6 @@
 import { publicApi } from "@/lib/api/instance"
 import {
+  BlacklistApiResponse,
   BlacklistResourceFilterRequest,
   PaginatedBlacklistResponse,
   PaginatedWhitelistResponse,
@@ -12,7 +13,7 @@ export const resourceService = {
     params?: BlacklistResourceFilterRequest,
     signal?: AbortSignal
   ): Promise<PaginatedBlacklistResponse> => {
-    const response = await publicApi.get<PaginatedBlacklistResponse>(
+    const response = await publicApi.get<BlacklistApiResponse>(
       "/resources/blacklist",
       {
         params: {
@@ -26,7 +27,7 @@ export const resourceService = {
         signal,
       }
     )
-    return response.data
+    return response.data.data
   },
   getWhiteList: async (
     params?: WhitelistResourceFilterRequest,

@@ -31,9 +31,10 @@ public class ResourceController {
     @Operation(summary = "Lấy blacklist được phân trang",
             description = "Trả về các chỉ báo lừa đảo đã được xác nhận và đang có hiệu lực để hiển thị trên giao diện danh sách đen, " +
                     "bao gồm tiêu đề, huy hiệu, mô tả, số lượng báo cáo và thời gian cập nhật.")
-    public ResponseEntity<PaginatedResponse<BlacklistResourceResponse>> getBlackListResource(
+    public ResponseEntity<BaseResponse<PaginatedResponse<BlacklistResourceResponse>>> getBlackListResource(
             @Valid @ModelAttribute @ParameterObject BlacklistResourceFilterRequest filter) {
-        return ResponseEntity.ok(resourceService.getBlackListResources(filter));
+        return ResponseEntity.ok(new BaseResponse<>(true," Lấy danh sách đen thành công",
+                resourceService.getBlackListResources(filter)));
     }
 
     @GetMapping("/whitelist")
