@@ -38,13 +38,6 @@ public class RegisterPartnerRequest {
     @ToString.Exclude
     private String verificationToken;
 
-    @NotBlank(message = "Mật khẩu không được để trống")
-    @Size(min = 6, max = 72, message = "Mật khẩu phải từ 6 đến 72 ký tự")
-    @Schema(description = "Mật khẩu tài khoản, từ 6 ký tự và tối đa 72 byte UTF-8", accessMode = Schema.AccessMode.WRITE_ONLY)
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    @ToString.Exclude
-    private String password;
-
     @NotBlank(message = "Họ tên và chức vụ người đại diện không được để trống")
     @Size(max = 255, message = "Thông tin người đại diện tối đa 255 ký tự")
     private String representativeNameAndTitle;
@@ -56,16 +49,16 @@ public class RegisterPartnerRequest {
     private String contactPhone;
 
     @NotEmpty(message = "Cần ít nhất một tên miền chính thống")
-    @Size(max = 1, message = "Chỉ được đăng ký một tên miền chính thống")
-    private List<@NotBlank(message = "Tên miền không được để trống") @Size(max = 253, message = "Tên miền tối đa 253 ký tự") String> officialDomains;
+    @Size(max = 253, message = "Tên miền tối đa 253 ký tự")
+    private String officialDomains;
 
     @NotEmpty(message = "Cần ít nhất một hotline chính thống")
-    @Size(max = 1, message = "Chỉ được đăng ký một hotline chính thống")
-    private List<@NotBlank(message = "Hotline không được để trống") @Size(max = 30, message = "Hotline tối đa 30 ký tự") String> officialHotlines;
+    @Size(max = 30, message = "Hotline tối đa 30 ký tự")
+    private String officialHotlines;
 
     @NotEmpty(message = "Cần ít nhất một SMS Brandname")
-    @Size(max = 1, message = "Chỉ được đăng ký một SMS Brandname")
-    private List<@NotBlank(message = "SMS Brandname không được để trống") @Size(max = 100, message = "SMS Brandname tối đa 100 ký tự") String> smsBrandNames;
+    @Size(max = 100, message = "SMS Brandname tối đa 100 ký tự")
+    private String smsBrandNames;
 
     @NotNull(message = "Cần xác định người đăng ký có phải đại diện pháp luật không")
     @Schema(description = "Nếu false, phải gửi authorizationFiles")
