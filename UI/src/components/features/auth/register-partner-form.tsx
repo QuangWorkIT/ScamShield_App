@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   Buildings,
@@ -24,15 +24,35 @@ import {
   Trash,
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
+import { toast } from "react-toastify"
+import { getRecaptchaToken } from "@/lib/firebase/recaptcha"
+import { OtpVerificationPopup } from "@/components/shared/otp-verification"
 import {
   AuthInput,
   AuthCheckbox,
   PrivilegePill,
   SocialProofBanner,
 } from "@/components/features/auth/auth-shared-components"
+import {
+  authServices,
+  RegisterPartnerPayload,
+} from "@/features/auth/services/auth-services"
 
+const RECAPTCHA_CONTAINER_ID = "register-partner-recaptcha"
+const FORM_STORAGE_KEY = "scamshield_partner_register_form"
+const COOLDOWN_STORAGE_KEY = "scamshield_partner_otp_cooldown_until"
+const OTP_OPEN_STORAGE_KEY = "scamshield_partner_otp_open"
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_ONLY_DIGITS = /^\d+$/
+const MAX_FILE_SIZE = 25 * 1024 * 1024
+const MAX_TOTAL_SIZE = 75 * 1024 * 1024
+const MAX_FILES = 10
+const SUPPORTED_FILE_TYPES: Record<string, string> = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+}
 const PUBLIC_EMAIL_DOMAINS = [
   "gmail.com",
   "yahoo.com",
@@ -50,6 +70,8 @@ interface PartnerFormState {
   officialHotline: string
   smsBrandname: string
   agreeCommitment: boolean
+  verificationToken: string
+  legalRepresentative: boolean | null
 }
 
 interface PartnerFormErrors {
@@ -61,15 +83,170 @@ interface PartnerFormErrors {
   officialDomains?: string
   officialHotline?: string
   smsBrandname?: string
-  files?: string
+  businessLicenseFiles?: string
+  ownershipProofFiles?: string
+  authorizationFiles?: string
   agreeCommitment?: string
+  legalRepresentative?: string
+}
+
+export interface PartnerRegistrationFiles {
+  businessLicenseFiles: File[]
+  ownershipProofFiles: File[]
+  authorizationFiles: File[]
+}
+
+interface FileUploadBoxProps {
+  id: string
+  label: string
+  required?: boolean
+  description: string
+  files: File[]
+  onFilesSelect: (selected: FileList | null) => void
+  onRemoveFile: (index: number) => void
+  error?: string
+}
+
+function FileUploadBox({
+  id,
+  label,
+  required,
+  description,
+  files,
+  onFilesSelect,
+  onRemoveFile,
+  error,
+}: FileUploadBoxProps) {
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  return (
+    <div className="rounded-xl border border-[#D8DEFF] bg-white p-4 shadow-2xs dark:border-border dark:bg-card">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <label
+          htmlFor={id}
+          className="text-xs font-bold text-[#131B2E] dark:text-foreground"
+        >
+          {label} {required && <span className="text-[#BA1A1A]">*</span>}
+        </label>
+        <span
+          className={cn(
+            "rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase",
+            required
+              ? "bg-[#EAEDFF] text-[#131A33] dark:bg-primary/20 dark:text-primary"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          {required ? "Bắt buộc" : "Tùy chọn"}
+        </span>
+      </div>
+
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          setIsDragOver(true)
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setIsDragOver(false)
+          onFilesSelect(e.dataTransfer.files)
+        }}
+        className={cn(
+          "rounded-lg border-2 border-dashed text-center transition-all focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2",
+          isDragOver
+            ? "border-primary bg-primary/5"
+            : "border-[#C6C6CE] bg-[#F9FAFF] hover:border-[#131A33] hover:bg-[#F2F4FF] dark:border-border dark:bg-muted/30 dark:hover:border-primary dark:hover:bg-muted/50",
+          error && "border-[#BA1A1A] bg-red-50/20"
+        )}
+      >
+        <input
+          type="file"
+          id={id}
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png"
+          aria-required={required}
+          aria-invalid={!!error}
+          aria-describedby={`${id}-description${error ? ` ${id}-error` : ""}`}
+          onChange={(e) => {
+            onFilesSelect(e.target.files)
+            e.target.value = ""
+          }}
+          className="sr-only"
+        />
+        <label htmlFor={id} className="block cursor-pointer p-4">
+          <span className="mx-auto mb-1.5 flex size-9 items-center justify-center rounded-full bg-[#EAEDFF] text-[#131A33] dark:bg-muted dark:text-foreground">
+            <FileArrowUp size={18} weight="regular" />
+          </span>
+          <span className="block text-xs font-semibold text-[#131B2E] dark:text-foreground">
+            Kéo thả tệp vào đây hoặc{" "}
+            <span className="text-[#545D7C] underline underline-offset-2 dark:text-primary">
+              chọn từ thiết bị
+            </span>
+          </span>
+          <span
+            id={`${id}-description`}
+            className="mt-0.5 block text-[11px] text-[#76767E] dark:text-muted-foreground"
+          >
+            {description}
+          </span>
+        </label>
+      </div>
+
+      {files.length > 0 && (
+        <div className="mt-2.5 flex flex-col gap-1.5">
+          {files.map((file, idx) => (
+            <div
+              key={`${file.name}-${idx}`}
+              className="flex items-center justify-between rounded-md border border-[#D1DEFF] bg-[#F8FAFF] px-2.5 py-1.5 text-xs dark:border-border dark:bg-muted/40"
+            >
+              <div className="flex items-center gap-2 overflow-hidden">
+                <FileText size={15} className="shrink-0 text-primary" />
+                <span className="truncate font-medium text-[#131B2E] dark:text-foreground">
+                  {file.name}
+                </span>
+                <span className="shrink-0 text-[11px] text-[#76767E]">
+                  ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRemoveFile(idx)
+                }}
+                className="text-[#BA1A1A] transition-colors hover:opacity-80"
+                aria-label={`Xóa tệp ${file.name}`}
+              >
+                <Trash size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <p
+          id={`${id}-error`}
+          className="mt-1.5 text-xs text-[#BA1A1A] dark:text-red-400"
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  )
 }
 
 export function RegisterPartnerForm() {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [files, setFiles] = useState<File[]>([])
-  const [isDragOver, setIsDragOver] = useState(false)
+  const [businessLicenseFiles, setBusinessLicenseFiles] = useState<File[]>([])
+  const [ownershipProofFiles, setOwnershipProofFiles] = useState<File[]>([])
+  const [authorizationFiles, setAuthorizationFiles] = useState<File[]>([])
   const [isSubmittedSuccess, setIsSubmittedSuccess] = useState(false)
+  const [isOtpOpen, setIsOtpOpen] = useState(false)
+  const [recaptchaToken, setRecaptchaToken] = useState("")
+  const [isGettingRecaptcha, setIsGettingRecaptcha] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [otpError, setOtpError] = useState<string | null>(null)
+  const [cooldown, setCooldown] = useState(0)
 
   const [form, setForm] = useState<PartnerFormState>({
     companyName: "",
@@ -81,10 +258,100 @@ export function RegisterPartnerForm() {
     officialHotline: "",
     smsBrandname: "",
     agreeCommitment: false,
+    verificationToken: "",
+    legalRepresentative: null,
   })
 
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [errors, setErrors] = useState<PartnerFormErrors>({})
+
+  // Khôi phục dữ liệu form, cooldown và trạng thái pop-up OTP khi chuyển trang hoặc tải lại trang
+  useEffect(() => {
+    // 1. Khôi phục thông tin form đã điền
+    try {
+      const savedForm = sessionStorage.getItem(FORM_STORAGE_KEY)
+      if (savedForm) {
+        const parsed = JSON.parse(savedForm)
+        setForm((prev) => ({ ...prev, ...parsed }))
+      }
+    } catch {
+      // ignore
+    }
+
+    // 2. Khôi phục cooldown 60s
+    let remaining = 0
+    try {
+      const savedExpire = localStorage.getItem(COOLDOWN_STORAGE_KEY)
+      if (savedExpire) {
+        remaining = Math.ceil((parseInt(savedExpire, 10) - Date.now()) / 1000)
+        if (remaining > 0) {
+          setCooldown(remaining)
+        } else {
+          localStorage.removeItem(COOLDOWN_STORAGE_KEY)
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 3. Khôi phục pop-up OTP nếu cooldown còn hiệu lực và pop-up đang mở trước đó
+    try {
+      if (
+        remaining > 0 &&
+        sessionStorage.getItem(OTP_OPEN_STORAGE_KEY) === "true"
+      ) {
+        setIsOtpOpen(true)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  // Lưu thông tin form vào sessionStorage để không bị mất dữ liệu khi rời trang
+  useEffect(() => {
+    try {
+      const { verificationToken, ...saveable } = form
+      sessionStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(saveable))
+    } catch {
+      // ignore
+    }
+  }, [form])
+
+  // Lưu trạng thái pop-up OTP vào sessionStorage
+  useEffect(() => {
+    try {
+      if (isOtpOpen) {
+        sessionStorage.setItem(OTP_OPEN_STORAGE_KEY, "true")
+      } else {
+        sessionStorage.removeItem(OTP_OPEN_STORAGE_KEY)
+      }
+    } catch {
+      // ignore
+    }
+  }, [isOtpOpen])
+
+  useEffect(() => {
+    if (cooldown <= 0) {
+      localStorage.removeItem(COOLDOWN_STORAGE_KEY)
+      return
+    }
+    const timer = setTimeout(() => {
+      try {
+        const savedExpire = localStorage.getItem(COOLDOWN_STORAGE_KEY)
+        if (savedExpire) {
+          const remaining = Math.ceil(
+            (parseInt(savedExpire, 10) - Date.now()) / 1000
+          )
+          setCooldown(remaining > 0 ? remaining : 0)
+        } else {
+          setCooldown((s) => s - 1)
+        }
+      } catch {
+        setCooldown((s) => s - 1)
+      }
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [cooldown])
 
   function validateField(
     name: keyof PartnerFormState,
@@ -121,7 +388,6 @@ export function RegisterPartnerForm() {
       }
       case "contactPhone": {
         const val = String(value).trim()
-        if (!val) return "Vui lòng nhập số điện thoại liên hệ."
         if (!PHONE_ONLY_DIGITS.test(val))
           return "Số điện thoại chỉ bao gồm chữ số."
         if (val.length !== 10) return "Số điện thoại phải gồm đúng 10 số."
@@ -129,7 +395,9 @@ export function RegisterPartnerForm() {
       }
       case "officialDomains": {
         const val = String(value).trim()
-        if (!val) return "Vui lòng nhập danh sách tên miền chính thống."
+        if (!val) return "Vui lòng nhập tên miền chính thống."
+        if (val.includes(",") || /\s/.test(val))
+          return "Mỗi hồ sơ chỉ đăng ký một tên miền; không dùng dấu phẩy hoặc khoảng trắng."
         return undefined
       }
       case "officialHotline": {
@@ -145,6 +413,11 @@ export function RegisterPartnerForm() {
       case "agreeCommitment": {
         if (!value)
           return "Vui lòng xác nhận cam kết tính chính xác của thông tin."
+        return undefined
+      }
+      case "legalRepresentative": {
+        if (value === null)
+          return "Vui lòng xác định bạn có phải đại diện pháp luật không."
         return undefined
       }
       default:
@@ -173,21 +446,67 @@ export function RegisterPartnerForm() {
     }
   }
 
-  function handleFilesSelect(selected: FileList | null) {
+  function handleFilesSelect(
+    field:
+      "businessLicenseFiles" | "ownershipProofFiles" | "authorizationFiles",
+    selected: FileList | null
+  ) {
     if (!selected || selected.length === 0) return
     const newFiles = Array.from(selected)
-    setFiles((prev) => [...prev, ...newFiles])
-    if (errors.files) {
-      setErrors((prev) => ({ ...prev, files: undefined }))
+    const allFiles = [
+      ...businessLicenseFiles,
+      ...ownershipProofFiles,
+      ...authorizationFiles,
+      ...newFiles,
+    ]
+    const invalidFile = newFiles.find((file) => {
+      const extension = file.name.split(".").pop()?.toLowerCase() ?? ""
+      return (
+        !file.size ||
+        file.size > MAX_FILE_SIZE ||
+        SUPPORTED_FILE_TYPES[extension] !== file.type
+      )
+    })
+    const error = invalidFile
+      ? `Tệp ${invalidFile.name} phải là PDF, JPG hoặc PNG và không vượt quá 25MB.`
+      : allFiles.length > MAX_FILES
+        ? "Tối đa 10 tệp cho một hồ sơ."
+        : allFiles.reduce((total, file) => total + file.size, 0) >
+            MAX_TOTAL_SIZE
+          ? "Tổng dung lượng tài liệu không vượt quá 75MB."
+          : undefined
+    if (error) {
+      setErrors((prev) => ({ ...prev, [field]: error }))
+      return
     }
+    if (field === "businessLicenseFiles") {
+      setBusinessLicenseFiles((prev) => [...prev, ...newFiles])
+    } else if (field === "ownershipProofFiles") {
+      setOwnershipProofFiles((prev) => [...prev, ...newFiles])
+    } else if (field === "authorizationFiles") {
+      setAuthorizationFiles((prev) => [...prev, ...newFiles])
+    }
+    setErrors((prev) => ({ ...prev, [field]: undefined }))
   }
 
-  function handleRemoveFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index))
+  function handleRemoveFile(
+    field:
+      "businessLicenseFiles" | "ownershipProofFiles" | "authorizationFiles",
+    index: number
+  ) {
+    if (field === "businessLicenseFiles") {
+      setBusinessLicenseFiles((prev) => prev.filter((_, i) => i !== index))
+    } else if (field === "ownershipProofFiles") {
+      setOwnershipProofFiles((prev) => prev.filter((_, i) => i !== index))
+    } else if (field === "authorizationFiles") {
+      setAuthorizationFiles((prev) => prev.filter((_, i) => i !== index))
+    }
+    setErrors((prev) => ({ ...prev, [field]: undefined }))
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (isGettingRecaptcha || isSubmittedSuccess) return
 
     const newErrors: PartnerFormErrors = {
       companyName: validateField("companyName", form.companyName),
@@ -202,9 +521,21 @@ export function RegisterPartnerForm() {
       officialHotline: validateField("officialHotline", form.officialHotline),
       smsBrandname: validateField("smsBrandname", form.smsBrandname),
       agreeCommitment: validateField("agreeCommitment", form.agreeCommitment),
-      files:
-        files.length === 0
-          ? "Vui lòng tải lên ít nhất 1 tài liệu xác thực pháp lý."
+      legalRepresentative: validateField(
+        "legalRepresentative",
+        form.legalRepresentative
+      ),
+      businessLicenseFiles:
+        businessLicenseFiles.length === 0
+          ? "Vui lòng tải lên giấy phép ĐKKD / giấy phép hoạt động."
+          : undefined,
+      ownershipProofFiles:
+        ownershipProofFiles.length === 0
+          ? "Vui lòng tải lên tài liệu chứng minh quyền sở hữu (domain / hotline / SMS Brandname)."
+          : undefined,
+      authorizationFiles:
+        form.legalRepresentative === false && authorizationFiles.length === 0
+          ? "Vui lòng tải lên giấy ủy quyền của tổ chức."
           : undefined,
     }
 
@@ -218,14 +549,102 @@ export function RegisterPartnerForm() {
       officialHotline: true,
       smsBrandname: true,
       agreeCommitment: true,
+      legalRepresentative: true,
     })
 
     setErrors(newErrors)
     const hasError = Object.values(newErrors).some(Boolean)
-    if (hasError) return
+    if (hasError || cooldown > 0) return
 
-    // UI-only confirmation as instructed (no API connection)
-    setIsSubmittedSuccess(true)
+    // Gọi getRecaptchaToken từ lib/firebase/recaptcha
+    setIsGettingRecaptcha(true)
+    setOtpError(null)
+    try {
+      const token = await getRecaptchaToken(RECAPTCHA_CONTAINER_ID)
+      setRecaptchaToken(token)
+      // Gửi OTP qua SMS tới SĐT liên hệ
+      await authServices.sendPhoneOtp(form.contactPhone, token)
+      const expireAt = Date.now() + 60 * 1000
+      localStorage.setItem(COOLDOWN_STORAGE_KEY, String(expireAt))
+      sessionStorage.setItem(OTP_OPEN_STORAGE_KEY, "true")
+      setCooldown(60)
+      // Mở OTP verification pop-up
+      setIsOtpOpen(true)
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Xác thực reCAPTCHA thất bại."
+      toast.error(message)
+    } finally {
+      setIsGettingRecaptcha(false)
+    }
+  }
+
+  async function handleOtpVerify(otp: string) {
+    setIsSubmitting(true)
+    setOtpError(null)
+
+    // Bước 1: Xác thực OTP điện thoại để lấy verificationToken
+    let verificationToken = form.verificationToken
+    try {
+      const response = await authServices.verifyContacts(form.contactPhone, otp)
+      verificationToken = response.verificationToken
+      setForm((prev) => ({ ...prev, verificationToken }))
+    } catch (otpErr) {
+      const message =
+        otpErr instanceof Error
+          ? otpErr.message
+          : "Mã xác thực OTP không chính xác hoặc đã hết hạn."
+      setOtpError(message)
+      setIsSubmitting(false)
+      return
+    }
+
+    // Bước 2 & 3: Chuẩn bị dữ liệu và gửi hồ sơ đăng ký đối tác (/api/partners/registrations)
+    try {
+      const partnerPayload: RegisterPartnerPayload = {
+        legalName: form.companyName.trim(),
+        officialDomains: form.officialDomains.trim(),
+        representativeNameAndTitle: form.representativeName.trim(),
+        contactPhone: form.contactPhone.trim(),
+        legalRepresentative: form.legalRepresentative as boolean,
+        corporateEmail: form.businessEmail.trim(),
+        taxCode: form.taxCode.trim(),
+        smsBrandNames: form.smsBrandname.trim(),
+        agreeTerms: form.agreeCommitment,
+        officialHotlines: form.officialHotline.trim(),
+        verificationToken,
+      }
+
+      const result = await authServices.registerPartner(partnerPayload, {
+        businessLicenseFiles,
+        ownershipProofFiles,
+        authorizationFiles,
+      })
+
+      toast.success(
+        result?.message || "Hồ sơ đối tác đã được gửi và đang chờ xét duyệt!"
+      )
+      try {
+        localStorage.removeItem(COOLDOWN_STORAGE_KEY)
+        sessionStorage.removeItem(OTP_OPEN_STORAGE_KEY)
+        sessionStorage.removeItem(FORM_STORAGE_KEY)
+      } catch {
+        // ignore
+      }
+      setIsOtpOpen(false)
+      setIsSubmittedSuccess(true)
+      setCooldown(0)
+    } catch (partnerErr) {
+      const message =
+        partnerErr instanceof Error
+          ? partnerErr.message
+          : "Gửi hồ sơ đăng ký đối tác thất bại."
+      toast.error(`Lỗi nộp hồ sơ đối tác: ${message}`)
+      // Đóng pop-up OTP để người dùng quay lại chỉnh sửa thông tin hồ sơ
+      setIsOtpOpen(false)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -328,7 +747,7 @@ export function RegisterPartnerForm() {
             </p>
           </div>
 
-          {/* Success Banner (Mock UI) */}
+          {/* Registration completion */}
           {isSubmittedSuccess && (
             <div
               role="alert"
@@ -341,350 +760,428 @@ export function RegisterPartnerForm() {
               />
               <div className="text-sm">
                 <p className="font-semibold">
-                  Đã gửi hồ sơ đối tác thành công (Mô phỏng UI)!
+                  Đã gửi hồ sơ đối tác thành công!
                 </p>
                 <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-400">
                   Hồ sơ và thông tin Whitelist của doanh nghiệp đã được tiếp
                   nhận. Đội ngũ đối soát sẽ phản hồi trong 24 - 48h làm việc.
                 </p>
+                <Link
+                  href="/guest"
+                  className="mt-3 inline-block font-semibold underline underline-offset-2"
+                >
+                  Về trang chủ
+                </Link>
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-            {/* ── SECTION 1: Legal Enterprise Info (KYB) ── */}
-            <div className="rounded-xl border border-[#EAEDFF] bg-[#F2F3FF]/70 p-4 sm:p-5 dark:border-border dark:bg-muted/40">
-              <div className="mb-4 flex items-center gap-2 border-b border-[#EAEDFF] pb-3 dark:border-border">
-                <Buildings
-                  size={18}
-                  weight="bold"
-                  className="text-[#131A33] dark:text-foreground"
-                />
-                <h3 className="text-sm font-bold text-[#131B2E] dark:text-foreground">
-                  1. Thông tin pháp lý Doanh nghiệp (KYB)
-                </h3>
-              </div>
-
-              <div className="flex flex-col gap-4">
-                {/* Tên doanh nghiệp */}
-                <AuthInput
-                  label="Tên doanh nghiệp / Ngân hàng"
-                  required
-                  icon={<Buildings size={18} weight="regular" />}
-                  placeholder="Ví dụ: Ngân hàng TMCP Ngoại thương Việt Nam"
-                  value={form.companyName}
-                  onChange={(e) => handleChange("companyName", e.target.value)}
-                  onBlur={() => handleBlur("companyName")}
-                  error={errors.companyName}
-                />
-
-                {/* Mã số thuế & Email doanh nghiệp */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <AuthInput
-                    label="Mã số thuế / Mã số DN"
-                    required
-                    icon={<IdentificationCard size={18} weight="regular" />}
-                    placeholder="Ví dụ: 0100112437"
-                    value={form.taxCode}
-                    onChange={(e) => handleChange("taxCode", e.target.value)}
-                    onBlur={() => handleBlur("taxCode")}
-                    error={errors.taxCode}
+          {!isSubmittedSuccess && (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+              {/* ── SECTION 1: Legal Enterprise Info (KYB) ── */}
+              <div className="rounded-xl border border-[#EAEDFF] bg-[#F2F3FF]/70 p-4 sm:p-5 dark:border-border dark:bg-muted/40">
+                <div className="mb-4 flex items-center gap-2 border-b border-[#EAEDFF] pb-3 dark:border-border">
+                  <Buildings
+                    size={18}
+                    weight="bold"
+                    className="text-[#131A33] dark:text-foreground"
                   />
-
-                  <AuthInput
-                    label="Email công vụ / doanh nghiệp"
-                    required
-                    type="email"
-                    icon={<EnvelopeSimple size={18} weight="regular" />}
-                    placeholder="contact@vietcombank.com.vn"
-                    value={form.businessEmail}
-                    onChange={(e) =>
-                      handleChange("businessEmail", e.target.value)
-                    }
-                    onBlur={() => handleBlur("businessEmail")}
-                    error={errors.businessEmail}
-                  />
+                  <h3 className="text-sm font-bold text-[#131B2E] dark:text-foreground">
+                    1. Thông tin pháp lý Doanh nghiệp (KYB)
+                  </h3>
                 </div>
 
-                {/* Chú thích email */}
-                <div className="flex items-center gap-2 rounded-lg bg-[#D0D9FD]/30 px-3 py-2 text-xs text-[#545D7C] dark:bg-muted/60 dark:text-muted-foreground">
-                  <Info size={15} weight="bold" className="shrink-0" />
-                  <span>
-                    Lưu ý: Hệ thống chỉ chấp nhận email theo tên miền tổ chức
-                    (@domain.com/.vn), không hỗ trợ @gmail.com, @yahoo.com
-                  </span>
-                </div>
-
-                {/* Người đại diện & SĐT */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-4">
+                  {/* Tên doanh nghiệp */}
                   <AuthInput
-                    label="Họ tên & Chức vụ người đại diện"
+                    label="Tên doanh nghiệp / Ngân hàng"
                     required
-                    icon={<User size={18} weight="regular" />}
-                    placeholder="Trần Quốc Huy - Trưởng phòng ATTT"
-                    value={form.representativeName}
+                    icon={<Buildings size={18} weight="regular" />}
+                    placeholder="Ví dụ: Ngân hàng TMCP Ngoại thương Việt Nam"
+                    value={form.companyName}
                     onChange={(e) =>
-                      handleChange("representativeName", e.target.value)
+                      handleChange("companyName", e.target.value)
                     }
-                    onBlur={() => handleBlur("representativeName")}
-                    error={errors.representativeName}
+                    onBlur={() => handleBlur("companyName")}
+                    error={errors.companyName}
                   />
 
-                  <AuthInput
-                    label="Số điện thoại liên hệ công tác"
-                    required
-                    type="tel"
-                    icon={<Phone size={18} weight="regular" />}
-                    placeholder="0912 345 678"
-                    value={form.contactPhone}
-                    onChange={(e) =>
-                      handleChange("contactPhone", e.target.value)
+                  {/* Mã số thuế & Email doanh nghiệp */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <AuthInput
+                      label="Mã số thuế / Mã số DN"
+                      required
+                      icon={<IdentificationCard size={18} weight="regular" />}
+                      placeholder="Ví dụ: 0100112437"
+                      value={form.taxCode}
+                      onChange={(e) => handleChange("taxCode", e.target.value)}
+                      onBlur={() => handleBlur("taxCode")}
+                      error={errors.taxCode}
+                    />
+
+                    <AuthInput
+                      label="Email công vụ / doanh nghiệp"
+                      required
+                      type="email"
+                      icon={<EnvelopeSimple size={18} weight="regular" />}
+                      placeholder="contact@vietcombank.com.vn"
+                      value={form.businessEmail}
+                      onChange={(e) =>
+                        handleChange("businessEmail", e.target.value)
+                      }
+                      onBlur={() => handleBlur("businessEmail")}
+                      error={errors.businessEmail}
+                    />
+                  </div>
+
+                  {/* Chú thích email */}
+                  <div className="flex items-center gap-2 rounded-lg bg-[#D0D9FD]/30 px-3 py-2 text-xs text-[#545D7C] dark:bg-muted/60 dark:text-muted-foreground">
+                    <Info size={15} weight="bold" className="shrink-0" />
+                    <span>
+                      Lưu ý: Hệ thống chỉ chấp nhận email theo tên miền tổ chức
+                      (@domain.com/.vn), không hỗ trợ @gmail.com, @yahoo.com
+                    </span>
+                  </div>
+
+                  {/* Người đại diện & SĐT */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <AuthInput
+                      label="Họ tên & Chức vụ người đại diện"
+                      required
+                      icon={<User size={18} weight="regular" />}
+                      placeholder="Trần Quốc Huy - Trưởng phòng ATTT"
+                      value={form.representativeName}
+                      onChange={(e) =>
+                        handleChange("representativeName", e.target.value)
+                      }
+                      onBlur={() => handleBlur("representativeName")}
+                      error={errors.representativeName}
+                    />
+
+                    <AuthInput
+                      label="Số điện thoại liên hệ công tác"
+                      required
+                      type="tel"
+                      icon={<Phone size={18} weight="regular" />}
+                      placeholder="0912 345 678"
+                      value={form.contactPhone}
+                      onChange={(e) =>
+                        handleChange("contactPhone", e.target.value)
+                      }
+                      onBlur={() => handleBlur("contactPhone")}
+                      error={errors.contactPhone}
+                    />
+                  </div>
+                  <fieldset
+                    aria-invalid={!!errors.legalRepresentative}
+                    aria-describedby={
+                      errors.legalRepresentative
+                        ? "legal-representative-error"
+                        : undefined
                     }
-                    onBlur={() => handleBlur("contactPhone")}
-                    error={errors.contactPhone}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* ── SECTION 2: Whitelist Registration Info ── */}
-            <div className="rounded-xl border border-[#EAEDFF] bg-[#F2F3FF]/70 p-4 sm:p-5 dark:border-border dark:bg-muted/40">
-              <div className="mb-4 flex items-center gap-2 border-b border-[#EAEDFF] pb-3 dark:border-border">
-                <Globe
-                  size={18}
-                  weight="bold"
-                  className="text-[#131A33] dark:text-foreground"
-                />
-                <h3 className="text-sm font-bold text-[#131B2E] dark:text-foreground">
-                  2. Thông tin đăng ký Whitelist (Cần bảo vệ)
-                </h3>
-              </div>
-
-              <div className="flex flex-col gap-4">
-                {/* Domains */}
-                <AuthInput
-                  label="Danh sách Tên miền chính thống (Official Domains)"
-                  required
-                  icon={<Globe size={18} weight="regular" />}
-                  placeholder="vietcombank.com.vn, vcbdigibank.vietcombank.com.vn"
-                  actionLabel="+ Thêm domain"
-                  onActionClick={() => {
-                    if (
-                      form.officialDomains &&
-                      !form.officialDomains.endsWith(", ")
-                    ) {
-                      handleChange(
-                        "officialDomains",
-                        `${form.officialDomains}, `
-                      )
-                    }
-                  }}
-                  value={form.officialDomains}
-                  onChange={(e) =>
-                    handleChange("officialDomains", e.target.value)
-                  }
-                  onBlur={() => handleBlur("officialDomains")}
-                  error={errors.officialDomains}
-                />
-
-                {/* Hotline & SMS Brandname */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <AuthInput
-                    label="Hotline / Đầu số tổng đài chính thống"
-                    required
-                    icon={<Headset size={18} weight="regular" />}
-                    placeholder="Ví dụ: 1900 545413, 1800 xxxx"
-                    value={form.officialHotline}
-                    onChange={(e) =>
-                      handleChange("officialHotline", e.target.value)
-                    }
-                    onBlur={() => handleBlur("officialHotline")}
-                    error={errors.officialHotline}
-                  />
-
-                  <AuthInput
-                    label="Tên định danh (SMS Brandname)"
-                    required
-                    icon={<ChatCircleText size={18} weight="regular" />}
-                    placeholder="Ví dụ: VIETCOMBANK, VCB_DIGI"
-                    value={form.smsBrandname}
-                    onChange={(e) =>
-                      handleChange("smsBrandname", e.target.value)
-                    }
-                    onBlur={() => handleBlur("smsBrandname")}
-                    error={errors.smsBrandname}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* ── SECTION 3: Upload Proof Documents ── */}
-            <div className="rounded-xl border border-[#EAEDFF] bg-[#F2F3FF]/70 p-4 sm:p-5 dark:border-border dark:bg-muted/40">
-              <div className="mb-4 flex items-center gap-2 border-b border-[#EAEDFF] pb-3 dark:border-border">
-                <FileArrowUp
-                  size={18}
-                  weight="bold"
-                  className="text-[#131A33] dark:text-foreground"
-                />
-                <h3 className="text-sm font-bold text-[#131B2E] dark:text-foreground">
-                  3. Tài liệu xác thực pháp lý & chủ quyền (Upload Proof)
-                </h3>
-              </div>
-
-              {/* Drag and Drop Zone */}
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setIsDragOver(true)
-                }}
-                onDragLeave={() => setIsDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  setIsDragOver(false)
-                  handleFilesSelect(e.dataTransfer.files)
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                  "cursor-pointer rounded-xl border-2 border-dashed bg-white p-6 text-center transition-all dark:bg-card",
-                  isDragOver
-                    ? "border-primary bg-primary/5"
-                    : "border-[#C6C6CE] hover:border-[#131A33] dark:border-border dark:hover:border-primary",
-                  errors.files && "border-[#BA1A1A]"
-                )}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => handleFilesSelect(e.target.files)}
-                  className="hidden"
-                />
-                <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-[#EAEDFF] text-[#131A33] dark:bg-muted dark:text-foreground">
-                  <FileArrowUp size={24} weight="regular" />
-                </div>
-                <p className="text-sm font-semibold text-[#131B2E] dark:text-foreground">
-                  Kéo thả hồ sơ vào đây hoặc{" "}
-                  <span className="text-[#545D7C] underline underline-offset-2 dark:text-primary">
-                    Chọn tệp từ thiết bị
-                  </span>
-                </p>
-                <p className="mt-1 text-xs text-[#936ABB] dark:text-muted-foreground">
-                  Định dạng hỗ trợ: PDF, JPG, PNG (Dung lượng tối đa: 25MB/tệp)
-                </p>
-              </div>
-
-              {/* Uploaded File List */}
-              {files.length > 0 && (
-                <div className="mt-3 flex flex-col gap-2">
-                  {files.map((file, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between rounded-lg border border-[#D1DEFF] bg-white px-3 py-2 text-xs dark:border-border dark:bg-card"
-                    >
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <FileText size={16} className="shrink-0 text-primary" />
-                        <span className="truncate font-medium text-[#131B2E] dark:text-foreground">
-                          {file.name}
-                        </span>
-                        <span className="shrink-0 text-[#76767E]">
-                          ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleRemoveFile(idx)
-                        }}
-                        className="text-[#BA1A1A] hover:opacity-80"
-                        aria-label="Xóa tệp"
-                      >
-                        <Trash size={16} />
-                      </button>
+                    className="flex flex-col gap-2"
+                  >
+                    <legend className="text-sm font-semibold text-[#131B2E] dark:text-foreground">
+                      Bạn có phải là người đại diện pháp luật của tổ chức?{" "}
+                      <span className="text-[#BA1A1A]">*</span>
+                    </legend>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm text-[#45464D] dark:text-foreground">
+                        <input
+                          type="radio"
+                          name="legalRepresentative"
+                          checked={form.legalRepresentative === true}
+                          onChange={() => {
+                            handleChange("legalRepresentative", true)
+                            setAuthorizationFiles([])
+                            setErrors((prev) => ({
+                              ...prev,
+                              legalRepresentative: undefined,
+                              authorizationFiles: undefined,
+                            }))
+                          }}
+                          className="accent-[#131A33]"
+                        />
+                        Có
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm text-[#45464D] dark:text-foreground">
+                        <input
+                          type="radio"
+                          name="legalRepresentative"
+                          checked={form.legalRepresentative === false}
+                          onChange={() => {
+                            handleChange("legalRepresentative", false)
+                            setErrors((prev) => ({
+                              ...prev,
+                              legalRepresentative: undefined,
+                            }))
+                          }}
+                          className="accent-[#131A33]"
+                        />
+                        Không, tôi được ủy quyền
+                      </label>
                     </div>
-                  ))}
+                    {errors.legalRepresentative && (
+                      <p
+                        id="legal-representative-error"
+                        className="text-xs text-[#BA1A1A] dark:text-red-400"
+                      >
+                        {errors.legalRepresentative}
+                      </p>
+                    )}
+                  </fieldset>
                 </div>
-              )}
-
-              {errors.files && (
-                <p className="mt-1.5 text-xs text-[#BA1A1A] dark:text-red-400">
-                  {errors.files}
-                </p>
-              )}
-
-              {/* Checklist Box */}
-              <div className="mt-3 rounded-lg bg-[#EAEDFF]/60 p-3 text-xs dark:bg-muted/60">
-                <p className="font-semibold text-[#131B2E] dark:text-foreground">
-                  YÊU CẦU CUNG CẤP ĐỦ 3 LOẠI TÀI LIỆU:
-                </p>
-                <ul className="mt-1.5 flex flex-col gap-1 text-[#45464D] dark:text-muted-foreground">
-                  <li>1. Giấy phép ĐKKD / Giấy phép hoạt động ngân hàng.</li>
-                  <li>
-                    2. Hợp đồng thuê đầu số viễn thông / Giấy chứng nhận sở hữu
-                    domain / Giấy cấp SMS Brandname.
-                  </li>
-                  <li>
-                    3. Giấy ủy quyền của tổ chức (nếu người đăng ký không phải
-                    đại diện pháp luật).
-                  </li>
-                </ul>
               </div>
-            </div>
 
-            {/* ── SECTION 4: Terms, CTA Button & Status Notice ── */}
-            <div className="flex flex-col gap-3">
-              <AuthCheckbox
-                checked={form.agreeCommitment}
-                onChange={(val) => handleChange("agreeCommitment", val)}
-                error={errors.agreeCommitment}
-              >
-                Cam kết toàn bộ thông tin kê khai là chính xác và thuộc quyền sở
-                hữu hợp pháp của đơn vị.
-              </AuthCheckbox>
+              {/* ── SECTION 2: Whitelist Registration Info ── */}
+              <div className="rounded-xl border border-[#EAEDFF] bg-[#F2F3FF]/70 p-4 sm:p-5 dark:border-border dark:bg-muted/40">
+                <div className="mb-4 flex items-center gap-2 border-b border-[#EAEDFF] pb-3 dark:border-border">
+                  <Globe
+                    size={18}
+                    weight="bold"
+                    className="text-[#131A33] dark:text-foreground"
+                  />
+                  <h3 className="text-sm font-bold text-[#131B2E] dark:text-foreground">
+                    2. Thông tin đăng ký Whitelist (Cần bảo vệ)
+                  </h3>
+                </div>
 
-              {/* Submit CTA */}
-              <button
-                type="submit"
-                className={cn(
-                  "flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#131A33] px-6 text-sm font-bold text-white shadow-md transition-all",
-                  "hover:bg-[#131A33]/90 active:scale-[0.99] dark:bg-primary dark:hover:bg-primary/90"
-                )}
-              >
-                <PaperPlaneTilt size={18} weight="fill" />
-                <span>Gửi Hồ Sơ Đăng Ký Đối Tác</span>
-              </button>
+                <div className="flex flex-col gap-4">
+                  {/* Domains */}
+                  <AuthInput
+                    label="Tên miền chính thống (Official Domain)"
+                    required
+                    icon={<Globe size={18} weight="regular" />}
+                    placeholder="Ví dụ: vietcombank.com.vn"
+                    value={form.officialDomains}
+                    onChange={(e) =>
+                      handleChange("officialDomains", e.target.value)
+                    }
+                    onBlur={() => handleBlur("officialDomains")}
+                    error={errors.officialDomains}
+                  />
 
-              {/* Notice Banner */}
-              <div className="flex items-start gap-2.5 rounded-lg bg-[#EAEDFF] p-3 text-xs leading-relaxed text-[#45464D] dark:bg-muted/70 dark:text-muted-foreground">
-                <ClockCountdown
-                  size={18}
-                  weight="bold"
-                  className="shrink-0 text-[#131A33] dark:text-foreground"
-                />
-                <span>
-                  Hồ sơ và thông tin Whitelist của Quý đối tác sẽ được Quản trị
-                  viên xét duyệt và đối soát trong vòng 24 - 48h làm việc trước
-                  khi tài khoản được kích hoạt.
-                </span>
+                  {/* Hotline & SMS Brandname */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <AuthInput
+                      label="Hotline / Đầu số tổng đài chính thống"
+                      required
+                      icon={<Headset size={18} weight="regular" />}
+                      placeholder="Ví dụ: 1900 545413, 1800 xxxx"
+                      value={form.officialHotline}
+                      onChange={(e) =>
+                        handleChange("officialHotline", e.target.value)
+                      }
+                      onBlur={() => handleBlur("officialHotline")}
+                      error={errors.officialHotline}
+                    />
+
+                    <AuthInput
+                      label="Tên định danh (SMS Brandname)"
+                      required
+                      icon={<ChatCircleText size={18} weight="regular" />}
+                      placeholder="Ví dụ: VIETCOMBANK, VCB_DIGI"
+                      value={form.smsBrandname}
+                      onChange={(e) =>
+                        handleChange("smsBrandname", e.target.value)
+                      }
+                      onBlur={() => handleBlur("smsBrandname")}
+                      error={errors.smsBrandname}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Form Footer */}
-            <div className="border-t border-[#EAEDFF] pt-4 text-center sm:text-left dark:border-border">
-              <p className="text-sm text-[#45464D] dark:text-muted-foreground">
-                Đã có tài khoản doanh nghiệp?{" "}
-                <Link
-                  href="/login"
-                  className="font-bold text-[#131B2E] underline underline-offset-2 hover:opacity-80 dark:text-foreground"
+              {/* ── SECTION 3: Upload Proof Documents ── */}
+              <div className="rounded-xl border border-[#EAEDFF] bg-[#F2F3FF]/70 p-4 sm:p-5 dark:border-border dark:bg-muted/40">
+                <div className="mb-4 flex items-center gap-2 border-b border-[#EAEDFF] pb-3 dark:border-border">
+                  <FileArrowUp
+                    size={18}
+                    weight="bold"
+                    className="text-[#131A33] dark:text-foreground"
+                  />
+                  <h3 className="text-sm font-bold text-[#131B2E] dark:text-foreground">
+                    3. Tài liệu xác thực pháp lý & chủ quyền (Upload Proof)
+                  </h3>
+                </div>
+
+                {/* 3 API-compliant file upload categories */}
+                <div className="flex flex-col gap-4">
+                  {/* 1. businessLicenseFiles */}
+                  <FileUploadBox
+                    id="businessLicenseFiles"
+                    label="1. Giấy phép ĐKKD / Giấy phép hoạt động"
+                    required
+                    description="Bản scan GPKD hoặc giấy phép hoạt động ngân hàng"
+                    files={businessLicenseFiles}
+                    onFilesSelect={(selected) =>
+                      handleFilesSelect("businessLicenseFiles", selected)
+                    }
+                    onRemoveFile={(idx) =>
+                      handleRemoveFile("businessLicenseFiles", idx)
+                    }
+                    error={errors.businessLicenseFiles}
+                  />
+
+                  {/* 2. ownershipProofFiles */}
+                  <FileUploadBox
+                    id="ownershipProofFiles"
+                    label="2. Tài liệu chứng minh sở hữu (Domain / Hotline / SMS Brandname)"
+                    required
+                    description="Hợp đồng viễn thông, chứng nhận sở hữu domain hoặc giấy cấp Brandname"
+                    files={ownershipProofFiles}
+                    onFilesSelect={(selected) =>
+                      handleFilesSelect("ownershipProofFiles", selected)
+                    }
+                    onRemoveFile={(idx) =>
+                      handleRemoveFile("ownershipProofFiles", idx)
+                    }
+                    error={errors.ownershipProofFiles}
+                  />
+
+                  {/* 3. authorizationFiles */}
+                  {form.legalRepresentative === false && (
+                    <FileUploadBox
+                      id="authorizationFiles"
+                      label="3. Giấy ủy quyền của tổ chức"
+                      required
+                      description="Văn bản ủy quyền hợp pháp của tổ chức"
+                      files={authorizationFiles}
+                      onFilesSelect={(selected) =>
+                        handleFilesSelect("authorizationFiles", selected)
+                      }
+                      onRemoveFile={(idx) =>
+                        handleRemoveFile("authorizationFiles", idx)
+                      }
+                      error={errors.authorizationFiles}
+                    />
+                  )}
+                </div>
+
+                {/* Checklist / Requirement box */}
+                <div className="mt-4 rounded-lg bg-[#EAEDFF]/60 p-3 text-xs dark:bg-muted/60">
+                  <p className="font-semibold text-[#131B2E] dark:text-foreground">
+                    LƯU Ý QUY CHUẨN HỒ SƠ TẢI LÊN:
+                  </p>
+                  <ul className="mt-1.5 flex flex-col gap-1 text-[#45464D] dark:text-muted-foreground">
+                    <li>
+                      • Định dạng hỗ trợ: PDF, JPG, PNG. Dung lượng tối đa:
+                      25MB/tệp.
+                    </li>
+                    <li>
+                      • Toàn bộ hồ sơ không vượt quá 10 tệp và tổng dung lượng
+                      không quá 75MB.
+                    </li>
+                    <li>
+                      • Thông tin trên hồ sơ phải đồng nhất với mã số thuế và
+                      tên pháp nhân đã kê khai.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* ── SECTION 4: Terms, CTA Button & Status Notice ── */}
+              <div className="flex flex-col gap-3">
+                <AuthCheckbox
+                  checked={form.agreeCommitment}
+                  onChange={(val) => handleChange("agreeCommitment", val)}
+                  error={errors.agreeCommitment}
                 >
-                  Đăng nhập
-                </Link>
-              </p>
-            </div>
-          </form>
+                  Cam kết toàn bộ thông tin kê khai là chính xác và thuộc quyền
+                  sở hữu hợp pháp của đơn vị.
+                </AuthCheckbox>
+
+                {/* Submit CTA */}
+                <button
+                  type="submit"
+                  disabled={
+                    isGettingRecaptcha || !form.agreeCommitment || cooldown > 0
+                  }
+                  className={cn(
+                    "flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#131A33] px-6 text-sm font-bold text-white shadow-md transition-all",
+                    "hover:bg-[#131A33]/90 active:scale-[0.99] dark:bg-primary dark:hover:bg-primary/90",
+                    "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#131A33] disabled:active:scale-100 dark:disabled:hover:bg-primary"
+                  )}
+                >
+                  {cooldown > 0 ? (
+                    <ClockCountdown size={18} weight="bold" />
+                  ) : (
+                    <PaperPlaneTilt size={18} weight="fill" />
+                  )}
+                  <span>
+                    {isGettingRecaptcha
+                      ? "Đang xác thực..."
+                      : cooldown > 0
+                        ? `Gửi lại sau ${cooldown}s`
+                        : "Gửi Hồ Sơ Đăng Ký Đối Tác"}
+                  </span>
+                </button>
+
+                {/* Nút mở lại pop-up OTP nếu còn trong thời gian chờ cooldown */}
+                {cooldown > 0 && !isOtpOpen && (
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => setIsOtpOpen(true)}
+                      className="text-xs font-semibold text-[#131B2E] underline underline-offset-2 hover:opacity-80 dark:text-foreground"
+                    >
+                      Đã nhận được mã? Bấm vào đây để nhập mã OTP
+                    </button>
+                  </div>
+                )}
+
+                {/* Invisible reCAPTCHA mounting container */}
+                <div id={RECAPTCHA_CONTAINER_ID} />
+
+                {/* Notice Banner */}
+                <div className="flex items-start gap-2.5 rounded-lg bg-[#EAEDFF] p-3 text-xs leading-relaxed text-[#45464D] dark:bg-muted/70 dark:text-muted-foreground">
+                  <ClockCountdown
+                    size={18}
+                    weight="bold"
+                    className="shrink-0 text-[#131A33] dark:text-foreground"
+                  />
+                  <span>
+                    Hồ sơ và thông tin Whitelist của Quý đối tác sẽ được Quản
+                    trị viên xét duyệt và đối soát trong vòng 24 - 48h làm việc
+                    trước khi tài khoản được kích hoạt.
+                  </span>
+                </div>
+              </div>
+
+              {/* Form Footer */}
+              <div className="border-t border-[#EAEDFF] pt-4 text-center sm:text-left dark:border-border">
+                <p className="text-sm text-[#45464D] dark:text-muted-foreground">
+                  Đã có tài khoản doanh nghiệp?{" "}
+                  <Link
+                    href="/login"
+                    className="font-bold text-[#131B2E] underline underline-offset-2 hover:opacity-80 dark:text-foreground"
+                  >
+                    Đăng nhập
+                  </Link>
+                </p>
+              </div>
+            </form>
+          )}
         </div>
       </div>
+
+      {/* OTP Verification Pop-up */}
+      <OtpVerificationPopup
+        isOpen={isOtpOpen}
+        onClose={() => {
+          setIsOtpOpen(false)
+          setOtpError(null)
+          try {
+            sessionStorage.removeItem(OTP_OPEN_STORAGE_KEY)
+          } catch {
+            // ignore
+          }
+        }}
+        onVerify={handleOtpVerify}
+        phoneNumber={form.contactPhone}
+        isLoading={isSubmitting}
+        error={otpError}
+      />
     </div>
   )
 }
