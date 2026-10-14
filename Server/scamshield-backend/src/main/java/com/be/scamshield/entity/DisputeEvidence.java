@@ -28,11 +28,20 @@ public class DisputeEvidence {
     @Column(name = "evidence_type", nullable = false)
     private String evidenceType;
 
-    @Column(name = "file_url")
+    @Column(name = "file_url", length = 2048)
     private String fileUrl;
 
     @Column(name = "file_name", length = 255)
     private String fileName;
+
+    @Column(name = "file_size")
+    private Long fileSize;
+
+    @Column(name = "content_type", length = 100)
+    private String contentType;
+
+    @Column(name = "storage_object_key", length = 1024)
+    private String storageObjectKey;
 
     @Column(name = "file_hash")
     private String fileHash;

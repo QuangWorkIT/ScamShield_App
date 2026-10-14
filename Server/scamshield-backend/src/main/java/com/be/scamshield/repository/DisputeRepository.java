@@ -9,10 +9,13 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface DisputeRepository extends JpaRepository<Dispute, Long>, JpaSpecificationExecutor<Dispute> {
     @Override
@@ -24,6 +27,17 @@ public interface DisputeRepository extends JpaRepository<Dispute, Long>, JpaSpec
             WHERE d.submittedByUser.id = :userId GROUP BY d.status
             """)
     List<StatusCount> countStatuses(Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Dispute d WHERE d.id = :id AND d.submittedByUser.id = :userId")
+    Optional<Dispute> findOwnedForUpdate(Long id, Long userId);
+
+    Optional<Dispute> findByIdAndSubmittedByUserIdAndStatus(Long id, Long userId, DisputeStatus status);
+
+    Page<Dispute> findBySubmittedByUserIdAndStatus(Long userId, DisputeStatus status, Pageable pageable);
+
+    boolean existsBySubmittedByUserIdAndConfirmedIndicatorIdAndStatusIn(
+            Long userId, Long confirmedId, Collection<DisputeStatus> statuses);
 
     @Query("""
             SELECT AVG(timestampdiff(SECOND, d.createdAt, d.resolvedAt)) FROM Dispute d
