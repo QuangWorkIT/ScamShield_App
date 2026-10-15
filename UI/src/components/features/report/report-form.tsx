@@ -27,18 +27,13 @@ interface ReportFormProps {
 
 export function ReportForm({ onSubmit, isLoading }: ReportFormProps) {
   const [threatType, setThreatType] = useState<ReportThreatType>("PHONE")
-  const [targetIdentifier, setTargetIdentifier] = useState("028.7109.8821")
+  const [targetIdentifier, setTargetIdentifier] = useState("")
   const [category, setCategory] = useState(
     "Mạo danh Cơ quan Nhà nước / Công an / VKSND"
   )
-  const [description, setDescription] = useState(
-    "Đối tượng mạo danh cán bộ Phòng PC02 đe dọa liên quan vụ án rửa tiền, yêu cầu chuyển 50 triệu sang VietinBank để giám định."
-  )
-  const [attachments, setAttachments] = useState<string[]>([
-    "chung_cu_zalo.jpg",
-    "bien_lai_50tr.png",
-  ])
-  const [isConfirmed, setIsConfirmed] = useState(true)
+  const [description, setDescription] = useState("")
+  const [attachments, setAttachments] = useState<string[]>([])
+  const [isConfirmed, setIsConfirmed] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
 
   const handleRemoveAttachment = (name: string) => {
@@ -54,17 +49,26 @@ export function ReportForm({ onSubmit, isLoading }: ReportFormProps) {
     e.preventDefault()
     if (!isConfirmed) return
 
-    await onSubmit({
-      threatType,
-      targetIdentifier,
-      category,
-      description,
-      attachments,
-      isConfirmed,
-    })
+    try {
+      await onSubmit({
+        threatType,
+        targetIdentifier: targetIdentifier.trim(),
+        category,
+        description: description.trim(),
+        attachments,
+        isConfirmed,
+      })
 
-    setIsSuccess(true)
-    setTimeout(() => setIsSuccess(false), 3000)
+      // Reset form after successful submission
+      setTargetIdentifier("")
+      setDescription("")
+      setAttachments([])
+      setIsConfirmed(false)
+      setIsSuccess(true)
+      setTimeout(() => setIsSuccess(false), 3500)
+    } catch {
+      // Error handled by parent toast
+    }
   }
 
   return (
@@ -142,7 +146,13 @@ export function ReportForm({ onSubmit, isLoading }: ReportFormProps) {
                 required
                 value={targetIdentifier}
                 onChange={(e) => setTargetIdentifier(e.target.value)}
-                placeholder="Nhập số điện thoại, URL hoặc STK..."
+                placeholder={
+                  threatType === "PHONE"
+                    ? "Nhập số điện thoại kẻ lừa đảo..."
+                    : threatType === "WEBSITE"
+                    ? "Nhập URL website giả mạo..."
+                    : "Nhập số tài khoản ngân hàng thụ hưởng..."
+                }
                 className="w-full rounded-xl border border-[#C6C6CE]/50 bg-[#FAF8FF] py-2.5 pr-3 pl-10 text-xs font-semibold text-[#131B2E] focus:ring-1 focus:ring-[#008CC7] focus:outline-hidden dark:border-border dark:bg-muted/30 dark:text-foreground"
               />
             </div>
@@ -274,7 +284,7 @@ export function ReportForm({ onSubmit, isLoading }: ReportFormProps) {
         <div className="flex items-center gap-3 pt-2">
           <button
             type="submit"
-            disabled={!isConfirmed || isLoading}
+            disabled={!isConfirmed || isLoading || !targetIdentifier.trim() || !description.trim()}
             className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#0B132B] px-6 py-2.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-[#131B2E] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           >
             {isLoading ? (

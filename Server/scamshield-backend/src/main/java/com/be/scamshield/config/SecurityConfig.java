@@ -91,6 +91,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/guest/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/dashboard/summary", "/api/dashboard/filters").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/resources/blacklist", "/api/resources/whitelist").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/education-hub", "/api/education-hub/filters",
                                 "/api/education-hub/contents", "/api/education-hub/contents/*").permitAll()
                         .requestMatchers(

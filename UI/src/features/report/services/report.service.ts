@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/api/instance"
 import {
   RecentReportItem,
   TrackingReportItem,
@@ -16,51 +17,6 @@ export const MOCK_SUMMARY_METRICS: ReportSummaryMetrics = {
   currentTierProgress: 600,
   maxTierPoints: 700,
 }
-
-export const MOCK_RECENT_REPORTS: RecentReportItem[] = [
-  {
-    id: "#RPT-8492",
-    targetValue: "089.842.xxxx",
-    targetType: "PHONE",
-    category: "Giả mạo Công an",
-    submittedDate: "18/10/2024 14:22",
-    evidenceCount: 3,
-    status: "APPROVED_BLACKLIST",
-    rewardPoints: 50,
-  },
-  {
-    id: "#RPT-8511",
-    targetValue: "tpbank-ebank.xyz[...]",
-    targetType: "WEBSITE",
-    category: "Website Phishing",
-    submittedDate: "Hôm nay 09:15",
-    evidenceCount: 2,
-    status: "PENDING",
-    rewardPoints: 0,
-  },
-  {
-    id: "#RPT-8304",
-    targetValue: "1903.6219.xxxx (TCB)",
-    targetType: "BANK_ACCOUNT",
-    category: "Tuyển CTV TikTok",
-    submittedDate: "12/10/2024 18:40",
-    evidenceCount: 4,
-    status: "MERGED_DUPLICATE",
-    duplicateRef: "#BLK-412",
-    rewardPoints: 25,
-  },
-  {
-    id: "#RPT-8190",
-    targetValue: "090.312.xxxx",
-    targetType: "PHONE",
-    category: "Cuộc gọi làm phiền",
-    submittedDate: "05/10/2024 10:02",
-    evidenceCount: 1,
-    status: "REJECTED",
-    rejectionReason: "Không đủ chứng cứ chứng minh ý đồ lừa đảo.",
-    rewardPoints: 0,
-  },
-]
 
 export const MOCK_TRACKING_REPORTS: TrackingReportItem[] = [
   {
@@ -130,12 +86,64 @@ export const MOCK_TRACKING_REPORTS: TrackingReportItem[] = [
   },
 ]
 
+export interface SubmitReportResponse {
+  success: boolean
+  reportId: string
+  message: string
+}
+
+/**
+ * Nộp báo cáo đối tượng lừa đảo qua API backend /api/reports/json
+ * Sử dụng authorizeApi từ hệ thống (kèm Bearer token)
+ */
 export async function submitScamReport(
-  _payload?: CreateReportPayload
-): Promise<{ success: boolean; reportId: string }> {
-  await new Promise((resolve) => setTimeout(resolve, 400))
+  payload: CreateReportPayload
+): Promise<SubmitReportResponse> {
+  const res = await authorizeApi.post("/api/reports/json", {
+    threatType: payload.threatType,
+    targetIdentifier: payload.targetIdentifier,
+    category: payload.category,
+    description: payload.description,
+    isConfirmed: payload.isConfirmed,
+    attachmentUrls: payload.attachments,
+  })
+
+  const data = res.data?.data
+  const reportId =
+    data?.reportCode ||
+    (data?.id ? `#RPT-${data.id}` : `#RPT-${Date.now().toString().slice(-4)}`)
+
   return {
     success: true,
-    reportId: `#RPT-${Math.floor(1000 + Math.random() * 9000)}`,
+    reportId,
+    message: res.data?.message || "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)",
   }
+}
+
+/**
+ * Lấy danh sách báo cáo cá nhân từ API backend /api/reports/my-reports
+ */
+export async function getMyReports(): Promise<RecentReportItem[]> {
+  try {
+    const res = await authorizeApi.get("/api/reports/my-reports")
+    if (res.data?.success && Array.isArray(res.data?.data)) {
+      return res.data.data.map((item: any) => ({
+        id: item.reportCode || (item.id ? `#RPT-${item.id}` : "#RPT-0000"),
+        targetValue: item.targetIdentifier || "",
+        targetType: (item.threatType as any) || "PHONE",
+        category: item.categoryName || item.category || "Chưa phân loại",
+        submittedDate: item.createdAt
+          ? new Date(item.createdAt).toLocaleString("vi-VN")
+          : "Vừa xong",
+        evidenceCount: item.evidenceCount || (item.evidences?.length ?? 0),
+        status: (item.status as any) || "PENDING",
+        rewardPoints: item.rewardPoints || 0,
+      }))
+    }
+  } catch (error: unknown) {
+    console.error("Lỗi khi tải danh sách báo cáo cá nhân:", error)
+    throw error
+  }
+
+  return []
 }

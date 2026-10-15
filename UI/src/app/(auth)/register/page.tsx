@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { User, Buildings } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import { RegisterIndividualForm } from "@/components/features/auth/register-individual-form"
@@ -8,8 +8,36 @@ import { RegisterPartnerForm } from "@/components/features/auth/register-partner
 
 type RegisterTab = "individual" | "partner"
 
+const REGISTER_TAB_KEY = "scamshield_register_active_tab"
+
 export default function AuthRegisterPage() {
   const [activeTab, setActiveTab] = useState<RegisterTab>("individual")
+
+  useEffect(() => {
+    const savedTab = sessionStorage.getItem(
+      REGISTER_TAB_KEY
+    ) as RegisterTab | null
+    const partnerCooldown = localStorage.getItem(
+      "scamshield_partner_otp_cooldown_until"
+    )
+    if (savedTab === "partner" || savedTab === "individual") {
+      setActiveTab(savedTab)
+    } else if (partnerCooldown) {
+      const remaining = parseInt(partnerCooldown, 10) - Date.now()
+      if (remaining > 0) {
+        setActiveTab("partner")
+      }
+    }
+  }, [])
+
+  function handleTabChange(tab: RegisterTab) {
+    setActiveTab(tab)
+    try {
+      sessionStorage.setItem(REGISTER_TAB_KEY, tab)
+    } catch {
+      // ignore
+    }
+  }
 
   return (
     <div className="w-full py-8 sm:py-12">
@@ -19,7 +47,7 @@ export default function AuthRegisterPage() {
           <div className="inline-flex items-center rounded-xl border border-[#D1DEFF] bg-[#EAEDFF] p-1.5 shadow-xs dark:border-border dark:bg-muted/80">
             <button
               type="button"
-              onClick={() => setActiveTab("individual")}
+              onClick={() => handleTabChange("individual")}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all",
                 activeTab === "individual"
@@ -32,7 +60,7 @@ export default function AuthRegisterPage() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("partner")}
+              onClick={() => handleTabChange("partner")}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all",
                 activeTab === "partner"
