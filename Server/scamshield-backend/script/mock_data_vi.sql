@@ -46,6 +46,7 @@ INSERT INTO guest_sessions (session_token_hash, created_at) VALUES
 
 -- 9. quota_policies
 INSERT INTO quota_policies (name, rank_id, max_checks_per_day, max_reports_per_day, created_at, updated_at) VALUES
+('GUEST', NULL, 5, 0, NOW(), NOW()),
 ('Tân Binh Quota', (SELECT id FROM reputation_ranks WHERE name='Tân Binh'), 10, 5, NOW(), NOW());
 
 -- 10. quota_usage
