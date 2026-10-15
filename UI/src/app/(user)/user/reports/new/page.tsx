@@ -6,7 +6,6 @@ import { toast } from "react-toastify"
 import { ReportForm } from "@/components/features/report/report-form"
 import { RecentReportsTable } from "@/components/features/report/recent-reports-table"
 import {
-  MOCK_RECENT_REPORTS,
   submitScamReport,
   getMyReports,
 } from "@/features/report/services/report.service"
@@ -16,19 +15,20 @@ import {
 } from "@/features/report/types/report.types"
 
 export default function UserReportsNewPage() {
-  const [reports, setReports] =
-    useState<RecentReportItem[]>(MOCK_RECENT_REPORTS)
+  const [reports, setReports] = useState<RecentReportItem[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoadingReports, setIsLoadingReports] = useState(true)
 
   useEffect(() => {
     async function loadReports() {
+      setIsLoadingReports(true)
       try {
         const data = await getMyReports()
-        if (data && data.length > 0) {
-          setReports(data)
-        }
+        setReports(data || [])
       } catch (err) {
-        // Fallback to initial mock reports
+        setReports([])
+      } finally {
+        setIsLoadingReports(false)
       }
     }
     loadReports()
@@ -87,7 +87,7 @@ export default function UserReportsNewPage() {
       <ReportForm onSubmit={handleSubmit} isLoading={isSubmitting} />
 
       {/* Recent User Reports Table */}
-      <RecentReportsTable items={reports} />
+      <RecentReportsTable items={reports} isLoading={isLoadingReports} />
     </div>
   )
 }

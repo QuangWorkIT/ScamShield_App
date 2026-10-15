@@ -18,51 +18,6 @@ export const MOCK_SUMMARY_METRICS: ReportSummaryMetrics = {
   maxTierPoints: 700,
 }
 
-export const MOCK_RECENT_REPORTS: RecentReportItem[] = [
-  {
-    id: "#RPT-8492",
-    targetValue: "089.842.xxxx",
-    targetType: "PHONE",
-    category: "Giả mạo Công an",
-    submittedDate: "18/10/2024 14:22",
-    evidenceCount: 3,
-    status: "APPROVED_BLACKLIST",
-    rewardPoints: 50,
-  },
-  {
-    id: "#RPT-8511",
-    targetValue: "tpbank-ebank.xyz[...]",
-    targetType: "WEBSITE",
-    category: "Website Phishing",
-    submittedDate: "Hôm nay 09:15",
-    evidenceCount: 2,
-    status: "PENDING",
-    rewardPoints: 0,
-  },
-  {
-    id: "#RPT-8304",
-    targetValue: "1903.6219.xxxx (TCB)",
-    targetType: "BANK_ACCOUNT",
-    category: "Tuyển CTV TikTok",
-    submittedDate: "12/10/2024 18:40",
-    evidenceCount: 4,
-    status: "MERGED_DUPLICATE",
-    duplicateRef: "#BLK-412",
-    rewardPoints: 25,
-  },
-  {
-    id: "#RPT-8190",
-    targetValue: "090.312.xxxx",
-    targetType: "PHONE",
-    category: "Cuộc gọi làm phiền",
-    submittedDate: "05/10/2024 10:02",
-    evidenceCount: 1,
-    status: "REJECTED",
-    rejectionReason: "Không đủ chứng cứ chứng minh ý đồ lừa đảo.",
-    rewardPoints: 0,
-  },
-]
-
 export const MOCK_TRACKING_REPORTS: TrackingReportItem[] = [
   {
     id: "#RPT-8492",
@@ -134,52 +89,39 @@ export const MOCK_TRACKING_REPORTS: TrackingReportItem[] = [
 export interface SubmitReportResponse {
   success: boolean
   reportId: string
-  message?: string
+  message: string
 }
 
 /**
  * Nộp báo cáo đối tượng lừa đảo qua API backend /api/reports/json
- * Sử dụng authorizeApi có sẵn trong hệ thống (kèm Bearer token)
+ * Sử dụng authorizeApi từ hệ thống (kèm Bearer token)
  */
 export async function submitScamReport(
   payload: CreateReportPayload
 ): Promise<SubmitReportResponse> {
-  try {
-    const res = await authorizeApi.post("/api/reports/json", {
-      threatType: payload.threatType,
-      targetIdentifier: payload.targetIdentifier,
-      category: payload.category,
-      description: payload.description,
-      isConfirmed: payload.isConfirmed,
-      attachmentUrls: payload.attachments,
-    })
+  const res = await authorizeApi.post("/api/reports/json", {
+    threatType: payload.threatType,
+    targetIdentifier: payload.targetIdentifier,
+    category: payload.category,
+    description: payload.description,
+    isConfirmed: payload.isConfirmed,
+    attachmentUrls: payload.attachments,
+  })
 
-    if (res.data?.success || res.status === 200 || res.status === 201) {
-      const data = res.data?.data
-      const reportId =
-        data?.reportCode ||
-        (data?.id ? `#RPT-${data.id}` : `#RPT-${Math.floor(1000 + Math.random() * 9000)}`)
-      return {
-        success: true,
-        reportId,
-        message: res.data?.message || "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)",
-      }
-    }
-  } catch (error: unknown) {
-    console.warn("API /api/reports/json not reachable, fallback to mock submission", error)
-  }
+  const data = res.data?.data
+  const reportId =
+    data?.reportCode ||
+    (data?.id ? `#RPT-${data.id}` : `#RPT-${Date.now().toString().slice(-4)}`)
 
-  // Fallback simulation nếu backend offline hoặc đang dev
-  await new Promise((resolve) => setTimeout(resolve, 300))
   return {
     success: true,
-    reportId: `#RPT-${Math.floor(1000 + Math.random() * 9000)}`,
-    message: "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)",
+    reportId,
+    message: res.data?.message || "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)",
   }
 }
 
 /**
- * Lấy danh sách báo cáo cá nhân từ /api/reports/my-reports
+ * Lấy danh sách báo cáo cá nhân từ API backend /api/reports/my-reports
  */
 export async function getMyReports(): Promise<RecentReportItem[]> {
   try {
@@ -190,15 +132,18 @@ export async function getMyReports(): Promise<RecentReportItem[]> {
         targetValue: item.targetIdentifier || "",
         targetType: (item.threatType as any) || "PHONE",
         category: item.categoryName || item.category || "Chưa phân loại",
-        submittedDate: item.createdAt ? new Date(item.createdAt).toLocaleString("vi-VN") : "Vừa xong",
+        submittedDate: item.createdAt
+          ? new Date(item.createdAt).toLocaleString("vi-VN")
+          : "Vừa xong",
         evidenceCount: item.evidenceCount || (item.evidences?.length ?? 0),
         status: (item.status as any) || "PENDING",
         rewardPoints: item.rewardPoints || 0,
       }))
     }
   } catch (error: unknown) {
-    console.warn("API /api/reports/my-reports not reachable, using fallback list", error)
+    console.error("Lỗi khi tải danh sách báo cáo cá nhân:", error)
+    throw error
   }
 
-  return [...MOCK_RECENT_REPORTS]
+  return []
 }
