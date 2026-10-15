@@ -38,13 +38,13 @@ $jwtRandom.Dispose()
 2. Vào **Run → Edit Configurations**. Chọn cấu hình `ScamshieldBackendApplication`; nếu chưa có, tạo cấu hình **Application**.
 3. Đặt các trường sau:
 
-| Trường | Giá trị |
-| --- | --- |
-| Main class | `com.be.scamshield.ScamshieldBackendApplication` |
-| Use classpath of module | Module `scamshield-backend` |
-| JDK / JRE | Java 21 |
-| Working directory | `D:\Huy-D\FPTU\Semester9\ScamShield_App\Server\scamshield-backend` |
-| Program arguments | `--spring.profiles.active=dev` |
+| Trường                  | Giá trị                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| Main class              | `com.be.scamshield.ScamshieldBackendApplication`                   |
+| Use classpath of module | Module `scamshield-backend`                                        |
+| JDK / JRE               | Java 21                                                            |
+| Working directory       | `D:\Huy-D\FPTU\Semester9\ScamShield_App\Server\scamshield-backend` |
+| Program arguments       | `--spring.profiles.active=dev`                                     |
 
 Nếu trường bị ẩn, mở **Modify options** để hiện **Working directory** hoặc **Program arguments**. Xem [hướng dẫn IntelliJ](https://www.jetbrains.com/help/idea/run-debug-configuration-java-application.html).
 

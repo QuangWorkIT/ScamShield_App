@@ -35,7 +35,11 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
 
-@SpringBootTest(properties = {"app.otp.email-expiration-ms=420000", "app.otp.phone-expiration-ms=180000"})
+@SpringBootTest(properties = {
+        "app.otp.email-expiration-ms=420000",
+        "app.otp.phone-expiration-ms=180000",
+        "spring.datasource.url=jdbc:h2:mem:scamshield-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1"
+})
 @ActiveProfiles("test")
 class SmsOtpReservationPersistenceTest {
     @Autowired

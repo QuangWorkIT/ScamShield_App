@@ -11,6 +11,7 @@ import com.be.scamshield.entity.ConfirmedIndicator;
 import com.be.scamshield.entity.Dispute;
 import com.be.scamshield.entity.Indicator;
 import com.be.scamshield.exception.UnauthorizedException;
+import com.be.scamshield.exception.BadRequestException;
 import com.be.scamshield.repository.DisputeEvidenceRepository;
 import com.be.scamshield.repository.DisputeRepository;
 import com.be.scamshield.service.IDisputeService;
@@ -43,6 +44,7 @@ public class DisputeServiceImpl implements IDisputeService {
     private final DisputeRepository disputeRepository;
     private final DisputeEvidenceRepository evidenceRepository;
     private final Clock clock;
+    private final SupabaseStorageService storageService;
 
     @Override
     public PaginatedResponse<DisputeListItemResponse> getMyDisputes(Long userId, DisputeListRequest filter) {
@@ -54,7 +56,9 @@ public class DisputeServiceImpl implements IDisputeService {
             var ids = page.stream().map(Dispute::getId).toList();
             for (var file : evidenceRepository.findFilesForDisputes(ids)) {
                 files.computeIfAbsent(file.getDisputeId(), key -> new ArrayList<>()).add(new Attachment(file.getId(),
-                        file.getEvidenceType(), file.getFileName(), file.getFileUrl(), file.getDescription(),
+                        file.getEvidenceType(), file.getFileName(), file.getStorageObjectKey() == null || file.getStorageObjectKey().isBlank() ? file.getFileUrl()
+                                : storageService.createDisputeDownloadUrl(file.getStorageObjectKey()),
+                        file.getFileSize(), file.getContentType(), file.getDescription(),
                         file.getVerificationStatus(), file.getCreatedAt()));
             }
         }
@@ -82,9 +86,13 @@ public class DisputeServiceImpl implements IDisputeService {
     }
 
     private Specification<Dispute> myDisputes(Long userId, DisputeListRequest filter) {
+        if (filter.getStatus() != null && filter.getStatus().contains(DisputeStatus.DRAFT)) {
+            throw new BadRequestException("Dùng API /api/disputes/drafts để xem hồ sơ nháp");
+        }
         return (root, query, cb) -> {
             List<Predicate> conditions = new ArrayList<>();
             conditions.add(cb.equal(root.get("submittedByUser").get("id"), userId));
+            conditions.add(cb.notEqual(root.get("status"), DisputeStatus.DRAFT));
             if (filter.getStatus() != null && !filter.getStatus().isEmpty()) conditions.add(root.get("status").in(filter.getStatus()));
             return cb.and(conditions.toArray(Predicate[]::new));
         };
@@ -96,7 +104,8 @@ public class DisputeServiceImpl implements IDisputeService {
         String value = indicator.getDisplayValue() == null || indicator.getDisplayValue().isBlank()
                 ? indicator.getNormalizedValue() : indicator.getDisplayValue();
         return new DisputeListItemResponse(dispute.getId(), "DSP-" + dispute.getId(), dispute.getStatus(), dispute.getPriority(),
-                dispute.getReason(), dispute.getProgressMessage(), dispute.getEstimatedResolutionAt(), dispute.getSupplementReason(),
+                dispute.getReason(), dispute.getLegalRelationship(), dispute.getDeclarationAcceptedAt(),
+                dispute.getProgressMessage(), dispute.getEstimatedResolutionAt(), dispute.getSupplementReason(),
                 dispute.getSupplementDeadline(), dispute.getResolutionReason(), dispute.getResolutionDocumentUrl(), dispute.getCreatedAt(),
                 dispute.getUpdatedAt(), dispute.getResolvedAt(), new IndicatorSummary(indicator.getId(), indicator.getType(), value,
                 confirmed.getStatus(), confirmed.getRetractedAt()), files.size(), List.copyOf(files));

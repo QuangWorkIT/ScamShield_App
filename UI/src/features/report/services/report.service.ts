@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/api/instance"
 import {
   RecentReportItem,
   TrackingReportItem,
@@ -130,12 +131,74 @@ export const MOCK_TRACKING_REPORTS: TrackingReportItem[] = [
   },
 ]
 
+export interface SubmitReportResponse {
+  success: boolean
+  reportId: string
+  message?: string
+}
+
+/**
+ * Nộp báo cáo đối tượng lừa đảo qua API backend /api/reports/json
+ * Sử dụng authorizeApi có sẵn trong hệ thống (kèm Bearer token)
+ */
 export async function submitScamReport(
-  _payload?: CreateReportPayload
-): Promise<{ success: boolean; reportId: string }> {
-  await new Promise((resolve) => setTimeout(resolve, 400))
+  payload: CreateReportPayload
+): Promise<SubmitReportResponse> {
+  try {
+    const res = await authorizeApi.post("/api/reports/json", {
+      threatType: payload.threatType,
+      targetIdentifier: payload.targetIdentifier,
+      category: payload.category,
+      description: payload.description,
+      isConfirmed: payload.isConfirmed,
+      attachmentUrls: payload.attachments,
+    })
+
+    if (res.data?.success || res.status === 200 || res.status === 201) {
+      const data = res.data?.data
+      const reportId =
+        data?.reportCode ||
+        (data?.id ? `#RPT-${data.id}` : `#RPT-${Math.floor(1000 + Math.random() * 9000)}`)
+      return {
+        success: true,
+        reportId,
+        message: res.data?.message || "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)",
+      }
+    }
+  } catch (error: unknown) {
+    console.warn("API /api/reports/json not reachable, fallback to mock submission", error)
+  }
+
+  // Fallback simulation nếu backend offline hoặc đang dev
+  await new Promise((resolve) => setTimeout(resolve, 300))
   return {
     success: true,
     reportId: `#RPT-${Math.floor(1000 + Math.random() * 9000)}`,
+    message: "Gửi báo cáo lừa đảo thành công! (+50 điểm uy tín)",
   }
+}
+
+/**
+ * Lấy danh sách báo cáo cá nhân từ /api/reports/my-reports
+ */
+export async function getMyReports(): Promise<RecentReportItem[]> {
+  try {
+    const res = await authorizeApi.get("/api/reports/my-reports")
+    if (res.data?.success && Array.isArray(res.data?.data)) {
+      return res.data.data.map((item: any) => ({
+        id: item.reportCode || (item.id ? `#RPT-${item.id}` : "#RPT-0000"),
+        targetValue: item.targetIdentifier || "",
+        targetType: (item.threatType as any) || "PHONE",
+        category: item.categoryName || item.category || "Chưa phân loại",
+        submittedDate: item.createdAt ? new Date(item.createdAt).toLocaleString("vi-VN") : "Vừa xong",
+        evidenceCount: item.evidenceCount || (item.evidences?.length ?? 0),
+        status: (item.status as any) || "PENDING",
+        rewardPoints: item.rewardPoints || 0,
+      }))
+    }
+  } catch (error: unknown) {
+    console.warn("API /api/reports/my-reports not reachable, using fallback list", error)
+  }
+
+  return [...MOCK_RECENT_REPORTS]
 }

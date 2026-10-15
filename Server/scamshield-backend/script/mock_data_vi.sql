@@ -115,8 +115,20 @@ INSERT INTO user_alert_subscriptions (user_id, category_id, subscribed_at) VALUE
 ((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), (SELECT id FROM scam_categories WHERE code='GIA_DANH_CQCN'), NOW());
 
 -- 26. notifications
-INSERT INTO notifications (user_id, type, title, message, is_read, created_at) VALUES
-((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'SYSTEM', 'Chào mừng', 'Chào mừng bạn đến với ScamShield. Hãy chung tay bảo vệ cộng đồng!', false, NOW());
+INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, is_read, created_at) VALUES
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'REPORT', 'Báo cáo #RPT-8492 đã được phê duyệt', 'Đã thẩm định và đưa số 089.842.XXXX vào Blacklist quốc gia (+50 điểm Sentinel).', 'REPORT', 8492, false, NOW() - INTERVAL '15 minutes'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'DISPUTE', 'Hồ sơ khiếu nại #DSP-3091 đã được thụ lý', 'Ban Thẩm định đang rà soát giải tỏa hotline 091.234.8899, tạm hạ 70% mức cảnh báo.', 'DISPUTE', 3091, false, NOW() - INTERVAL '1 hour'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'SYSTEM', 'Bạn đã đủ điều kiện nâng cấp Sentinel Lv.3', 'Đã tích lũy đủ 700/700 Điểm Sentinel. Mở rộng hạn mức tra cứu AI lên 100 lượt/ngày.', 'SENTINEL_RANK', 3, false, NOW() - INTERVAL '3 hours'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'REPORT', 'Báo cáo #RPT-8411 được gộp vào hồ sơ Forex', 'Ảnh chứng từ của bạn đã liên kết vào hồ sơ FX-VIETNAM-CRIME-2025 (+25 điểm đối soát).', 'REPORT', 8411, true, NOW() - INTERVAL '1 day'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'DISPUTE', 'Đã gỡ bỏ nhãn cảnh báo tên miền shop-chinhhang.vn', 'Hồ sơ khiếu nại #DSP-2814 giải tỏa thành công sau xác thực giấy phép TMĐT.', 'DISPUTE', 2814, true, NOW() - INTERVAL '3 days'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'SYSTEM', 'Cập nhật cơ sở dữ liệu phòng vệ ScamShield v4.8', 'Đã tự động cập nhật 1.420 chữ ký độc hại và danh sách số điện thoại lừa đảo mới.', 'SYSTEM_UPDATE', NULL, true, NOW() - INTERVAL '5 days'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'REPORT', 'Báo cáo #RPT-8390 đã được xác minh', 'Tài khoản ngân hàng 19036782910 đã được đối soát vào cơ sở dữ liệu cảnh báo.', 'REPORT', 8390, true, NOW() - INTERVAL '7 days'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'REPORT', 'Báo cáo #RPT-8355 được ghi nhận', 'Đã tiếp nhận bằng chứng bổ sung cho thủ đoạn mạo danh công an.', 'REPORT', 8355, true, NOW() - INTERVAL '10 days'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'REPORT', 'Báo cáo #RPT-8299 đã đóng hồ sơ', 'Hoàn tất phân tích rủi ro cho tên miền giả mạo dịch vụ công.', 'REPORT', 8299, true, NOW() - INTERVAL '14 days'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'REPORT', 'Báo cáo #RPT-8210 đã đưa vào giám sát', 'Số điện thoại phát tán tin nhắn mạo danh đang nằm trong danh sách theo dõi đặc biệt.', 'REPORT', 8210, true, NOW() - INTERVAL '20 days'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'SYSTEM', 'Chào mừng bạn đến với ScamShield', 'Hãy chung tay xây dựng không gian mạng an toàn cho cộng đồng!', 'SYSTEM', NULL, true, NOW() - INTERVAL '30 days'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'SYSTEM', 'Hoàn tất thiết lập bảo mật 2 lớp (2FA)', 'Tài khoản của bạn đã được bảo vệ nâng cao bằng mã OTP xác thực.', 'SYSTEM', NULL, true, NOW() - INTERVAL '35 days');
+
 
 -- 27. partner_official_alerts
 INSERT INTO partner_official_alerts (partner_id, submission_type, title, description, status, created_at) VALUES

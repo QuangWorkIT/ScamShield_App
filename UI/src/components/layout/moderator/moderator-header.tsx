@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ShieldCheck, Bell, CaretDown } from "@phosphor-icons/react"
+import { ShieldCheck, Bell, CaretDown, ArrowsClockwise } from "@phosphor-icons/react"
 
 interface ModeratorHeaderProps {
   className?: string

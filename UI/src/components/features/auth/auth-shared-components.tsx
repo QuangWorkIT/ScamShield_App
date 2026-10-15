@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+import React, { useId } from "react"
 import { WarningCircle, Check } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 
@@ -29,7 +29,8 @@ export function AuthInput({
   className,
   ...props
 }: AuthInputProps) {
-  const inputId = id || props.name
+  const generatedId = useId()
+  const inputId = id || props.name || generatedId
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -59,6 +60,8 @@ export function AuthInput({
         <input
           id={inputId}
           aria-invalid={!!error}
+          aria-required={required}
+          aria-describedby={error ? `${inputId}-error` : undefined}
           className={cn(
             "h-12 w-full rounded-lg bg-white pr-4 pl-11 text-sm",
             suffix && "pr-11",
@@ -82,7 +85,7 @@ export function AuthInput({
       {error && (
         <div className="flex items-center gap-1 pt-0.5 text-xs text-[#BA1A1A] dark:text-red-400">
           <WarningCircle size={14} weight="fill" className="shrink-0" />
-          <span>{error}</span>
+          <span id={`${inputId}-error`}>{error}</span>
         </div>
       )}
     </div>
