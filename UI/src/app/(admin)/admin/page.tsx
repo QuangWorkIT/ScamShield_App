@@ -1,3 +1,5 @@
+import { AdminAccountsDashboard } from "@/components/features/admin/admin-accounts-dashboard"
+
 export default function AdminHomePage() {
-  return <div>This is admin home page</div>
+  return <AdminAccountsDashboard />
 }
