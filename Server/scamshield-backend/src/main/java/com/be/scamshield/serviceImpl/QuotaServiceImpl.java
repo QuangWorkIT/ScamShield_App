@@ -5,6 +5,7 @@ import com.be.scamshield.entity.GuestSession;
 import com.be.scamshield.entity.QuotaPolicie;
 import com.be.scamshield.repository.GuestSessionRepository;
 import com.be.scamshield.repository.QuotaPolicyRepository;
+import com.be.scamshield.service.IGuestSessionService;
 import com.be.scamshield.service.IQuotaCounterService;
 import com.be.scamshield.service.IQuotaService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,6 +35,7 @@ public class QuotaServiceImpl implements IQuotaService {
     private static final int DEFAULT_GUEST_LIMIT = 5;
 
     private final IQuotaCounterService quotaCounterService;
+    private final IGuestSessionService guestSessionService;
     private final GuestSessionRepository guestSessionRepository;
     private final QuotaPolicyRepository quotaPolicyRepository;
 
@@ -84,36 +86,12 @@ public class QuotaServiceImpl implements IQuotaService {
             return "quota:guest:token:" + tokenHash + ":" + todayStr;
         }
 
-        String clientIp = resolveClientIp(httpRequest);
+        String clientIp = guestSessionService.resolveClientIp(httpRequest);
         if (StringUtils.hasText(clientIp)) {
             return "quota:guest:ip:" + hashSha256(clientIp) + ":" + todayStr;
         }
 
         return "quota:guest:anonymous:" + todayStr;
-    }
-
-    private String resolveClientIp(HttpServletRequest request) {
-        if (request == null) {
-            return null;
-        }
-        String[] headers = {
-                "X-Forwarded-For",
-                "Proxy-Client-IP",
-                "WL-Proxy-Client-IP",
-                "HTTP_CLIENT_IP",
-                "HTTP_X_FORWARDED_FOR",
-                "X-Real-IP"
-        };
-        for (String header : headers) {
-            String ip = request.getHeader(header);
-            if (StringUtils.hasText(ip) && !"unknown".equalsIgnoreCase(ip.trim())) {
-                if (ip.contains(",")) {
-                    ip = ip.split(",")[0].trim();
-                }
-                return ip;
-            }
-        }
-        return request.getRemoteAddr();
     }
 
     private String hashSha256(String input) {

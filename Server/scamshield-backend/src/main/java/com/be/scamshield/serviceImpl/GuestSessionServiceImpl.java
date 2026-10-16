@@ -100,23 +100,7 @@ public class GuestSessionServiceImpl implements IGuestSessionService {
         if (request == null) {
             return null;
         }
-        String[] headers = {
-                "X-Forwarded-For",
-                "Proxy-Client-IP",
-                "WL-Proxy-Client-IP",
-                "HTTP_CLIENT_IP",
-                "HTTP_X_FORWARDED_FOR",
-                "X-Real-IP"
-        };
-        for (String header : headers) {
-            String ip = request.getHeader(header);
-            if (StringUtils.hasText(ip) && !"unknown".equalsIgnoreCase(ip.trim())) {
-                if (ip.contains(",")) {
-                    ip = ip.split(",")[0].trim();
-                }
-                return ip;
-            }
-        }
+
         return request.getRemoteAddr();
     }
 
