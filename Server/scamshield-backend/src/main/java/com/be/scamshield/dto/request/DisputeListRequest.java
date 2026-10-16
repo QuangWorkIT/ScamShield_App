@@ -15,7 +15,7 @@ import java.util.List;
 public class DisputeListRequest {
 
     @Size(max = 5, message = "Chỉ được chọn tối đa 5 trạng thái khiếu nại")
-    @Schema(description = "Bỏ trống để lấy mọi trạng thái. Chọn nhiều trạng thái bằng dấu phẩy "
+    @Schema(description = "Bỏ trống để lấy mọi trạng thái của hồ sơ đã nộp, không gồm DRAFT. Chọn nhiều trạng thái bằng dấu phẩy "
             + "hoặc lặp lại tham số status", example = "IN_REVIEW,NEEDS_MORE_INFO")
     private List<@NotNull(message = "Trạng thái khiếu nại không được để trống") DisputeStatus> status;
 

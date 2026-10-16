@@ -2,6 +2,7 @@ package com.be.scamshield.dto.response;
 
 import com.be.scamshield.constant.DisputePriority;
 import com.be.scamshield.constant.DisputeStatus;
+import com.be.scamshield.constant.DisputeLegalRelationship;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -16,6 +17,9 @@ public record DisputeListItemResponse(
         @Schema(description = "NORMAL: bình thường; HIGH: ưu tiên cao")
         DisputePriority priority,
         String reason,
+        @Schema(description = "Quan hệ pháp lý do người gửi khai báo, chưa phải kết quả xác minh")
+        DisputeLegalRelationship legalRelationship,
+        LocalDateTime declarationAcceptedAt,
         @Schema(description = "Thông báo tiến trình hiện tại, có thể null nếu chưa cập nhật")
         String progressMessage,
         @Schema(description = "Thời điểm dự kiến trả kết quả, có thể null; không phải thời điểm hoàn tất thực tế")
@@ -53,6 +57,9 @@ public record DisputeListItemResponse(
             @Schema(description = "Tên file để hiển thị; có thể null với dữ liệu cũ")
             String fileName,
             String fileUrl,
+            @Schema(description = "Dung lượng tệp tính bằng byte; null với dữ liệu cũ")
+            Long fileSize,
+            String contentType,
             String description,
             String verificationStatus,
             LocalDateTime createdAt

@@ -15,6 +15,6 @@ public class FirebasePhoneProperties {
     private String apiKey = "";
 
     @Min(1)
-    @Max(10)
-    private int maxRequestsPer24Hours = 10;
+    @Max(100)
+    private int maxRequestsPer24Hours = 100;
 }

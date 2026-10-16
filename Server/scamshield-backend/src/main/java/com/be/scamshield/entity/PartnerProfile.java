@@ -5,7 +5,6 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Entity
 @Table(name = "partner_profiles")
@@ -73,18 +72,12 @@ public class PartnerProfile {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @ElementCollection
-    @CollectionTable(name = "partner_profile_domains", joinColumns = @JoinColumn(name = "partner_id"))
-    @Column(name = "domain", nullable = false, length = 253)
-    private List<String> officialDomains;
+    @Column(name = "official_domain", length = 253)
+    private String officialDomain;
 
-    @ElementCollection
-    @CollectionTable(name = "partner_profile_hotlines", joinColumns = @JoinColumn(name = "partner_id"))
-    @Column(name = "hotline", nullable = false, length = 30)
-    private List<String> officialHotlines;
+    @Column(name = "official_hotline", length = 30)
+    private String officialHotline;
 
-    @ElementCollection
-    @CollectionTable(name = "partner_profile_brand_names", joinColumns = @JoinColumn(name = "partner_id"))
-    @Column(name = "brand_name", nullable = false, length = 100)
-    private List<String> smsBrandNames;
+    @Column(name = "sms_brand_name", length = 100)
+    private String smsBrandName;
 }
