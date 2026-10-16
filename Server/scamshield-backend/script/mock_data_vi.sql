@@ -49,10 +49,6 @@ INSERT INTO quota_policies (name, rank_id, max_checks_per_day, max_reports_per_d
 ('GUEST', NULL, 5, 0, NOW(), NOW()),
 ('Tân Binh Quota', (SELECT id FROM reputation_ranks WHERE name='Tân Binh'), 10, 5, NOW(), NOW());
 
--- 10. quota_usage
-INSERT INTO quota_usage (user_id, usage_date, check_count, report_count) VALUES
-((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), CURRENT_DATE, 3, 1);
-
 -- 11. rate_limit_policies
 INSERT INTO rate_limit_policies (name, scope, max_requests, window_seconds, enabled, created_at, updated_at) VALUES
 ('Global API Limit', 'USER', 100, 60, true, NOW(), NOW());

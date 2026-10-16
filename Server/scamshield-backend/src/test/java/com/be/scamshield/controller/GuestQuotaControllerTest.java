@@ -2,7 +2,7 @@ package com.be.scamshield.controller;
 
 import com.be.scamshield.dto.request.CreateGuestSessionRequest;
 import com.be.scamshield.entity.GuestSession;
-import com.be.scamshield.entity.QuotaPolicie;
+import com.be.scamshield.entity.QuotaPolicy;
 import com.be.scamshield.repository.GuestSessionRepository;
 import com.be.scamshield.repository.QuotaPolicyRepository;
 import com.be.scamshield.service.IQuotaCounterService;
@@ -65,7 +65,7 @@ class GuestQuotaControllerTest {
                     p.setMaxChecksPerDay(5);
                     quotaPolicyRepository.save(p);
                 },
-                () -> quotaPolicyRepository.save(QuotaPolicie.builder()
+                () -> quotaPolicyRepository.save(QuotaPolicy.builder()
                         .name("GUEST")
                         .maxChecksPerDay(5)
                         .maxReportsPerDay(0)
