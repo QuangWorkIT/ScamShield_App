@@ -10,7 +10,10 @@ import java.time.ZoneId;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.context.annotation.Profile;
+
 @Service
+@Profile("test")
 @Slf4j
 public class QuotaCounterServiceImpl implements IQuotaCounterService {
 

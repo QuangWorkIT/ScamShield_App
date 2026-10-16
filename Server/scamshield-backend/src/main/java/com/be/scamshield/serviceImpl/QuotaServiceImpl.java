@@ -2,7 +2,7 @@ package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.dto.response.GuestQuotaResponse;
 import com.be.scamshield.entity.GuestSession;
-import com.be.scamshield.entity.QuotaPolicie;
+import com.be.scamshield.entity.QuotaPolicy;
 import com.be.scamshield.repository.GuestSessionRepository;
 import com.be.scamshield.repository.QuotaPolicyRepository;
 import com.be.scamshield.service.IGuestSessionService;
@@ -63,7 +63,7 @@ public class QuotaServiceImpl implements IQuotaService {
     }
 
     private int resolveGuestDailyLimit() {
-        Optional<QuotaPolicie> policyOpt = quotaPolicyRepository.findByNameIgnoreCase("GUEST");
+        Optional<QuotaPolicy> policyOpt = quotaPolicyRepository.findByNameIgnoreCase("GUEST");
         if (policyOpt.isEmpty()) {
             policyOpt = quotaPolicyRepository.findByName("GUEST");
         }

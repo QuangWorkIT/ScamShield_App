@@ -4,12 +4,12 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "quota_policies")
+@Table(name = "rate_limit_policies")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class QuotaPolicie {
+public class RateLimitPolicy {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -19,15 +19,17 @@ public class QuotaPolicie {
     @Column(name = "name", unique = true, nullable = false)
     private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "rank_id")
-    private ReputationRank rank;
+    @Column(name = "scope", nullable = false)
+    private String scope;
 
-    @Column(name = "max_checks_per_day")
-    private Integer maxChecksPerDay;
+    @Column(name = "max_requests", nullable = false)
+    private Integer maxRequests;
 
-    @Column(name = "max_reports_per_day")
-    private Integer maxReportsPerDay;
+    @Column(name = "window_seconds", nullable = false)
+    private Integer windowSeconds;
+
+    @Column(name = "enabled", nullable = false)
+    private Boolean enabled;
 
     @Column(name = "created_at", nullable = false)
     private java.time.LocalDateTime createdAt;
