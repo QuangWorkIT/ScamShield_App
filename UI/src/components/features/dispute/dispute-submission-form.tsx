@@ -188,8 +188,8 @@ export function DisputeSubmissionForm({ onSuccess }: DisputeSubmissionFormProps)
       return
     }
 
-    if (!reason.trim()) {
-      toast.warning("Vui lòng nhập lý do và giải trình chi tiết.")
+    if (reason.trim().length < 10) {
+      toast.warning("Lý do khiếu nại và giải trình phải có tối thiểu 10 ký tự.")
       return
     }
 

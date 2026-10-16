@@ -24,7 +24,7 @@ export interface PaginatedResult<T> {
 }
 
 export interface DisputeApiResponse<T> {
-  success: boolean
+  isSuccess: boolean
   message: string
   data: T
 }
@@ -58,7 +58,7 @@ export async function getMyDisputes(
       { params: queryParams }
     )
 
-    if (res.data?.success && res.data?.data) {
+    if (res.data?.isSuccess && res.data?.data) {
       return res.data.data
     }
 
@@ -90,7 +90,7 @@ export async function getMyDisputeSummary(): Promise<DisputeSummary> {
       "/disputes/me/summary"
     )
 
-    if (res.data?.success && res.data?.data) {
+    if (res.data?.isSuccess && res.data?.data) {
       return res.data.data
     }
 
@@ -237,7 +237,7 @@ export async function getMyDrafts(
       { params: { page, size } }
     )
 
-    if (res.data?.success && res.data?.data) {
+    if (res.data?.isSuccess && res.data?.data) {
       return res.data.data
     }
 

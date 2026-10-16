@@ -266,7 +266,7 @@ export function DisputeTrackingView({ onNavigateToSubmit }: DisputeTrackingViewP
           </div>
           <div className="flex items-end gap-2">
             <span className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
-              {summary?.restorationRate != null ? `${summary.restorationRate}%` : "100%"}
+              {summary?.restorationRate != null ? `${summary.restorationRate}%` : "--"}
             </span>
             <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded">
               TRUSTSEAL
