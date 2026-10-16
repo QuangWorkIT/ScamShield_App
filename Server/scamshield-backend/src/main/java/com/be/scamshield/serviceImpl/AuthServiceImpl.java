@@ -7,6 +7,7 @@ import com.be.scamshield.dto.AuthResponse;
 import com.be.scamshield.dto.ChangePasswordRequest;
 import com.be.scamshield.dto.LoginRequest;
 import com.be.scamshield.dto.UserDto;
+import com.be.scamshield.dto.request.LoginGoogleRequest;
 import com.be.scamshield.dto.request.RegisterGoogleRequest;
 import com.be.scamshield.dto.request.RegisterPersonalRequest;
 import com.be.scamshield.entity.RefreshToken;
@@ -16,6 +17,7 @@ import com.be.scamshield.exception.*;
 import com.be.scamshield.repository.RefreshTokenRepository;
 import com.be.scamshield.repository.RoleRepository;
 import com.be.scamshield.repository.UserRepository;
+import com.be.scamshield.security.GoogleTokenVerifier;
 import com.be.scamshield.security.JwtTokenProvider;
 import com.be.scamshield.security.UserPrincipal;
 import com.be.scamshield.service.IAuthService;
@@ -40,6 +42,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -65,6 +68,7 @@ public class AuthServiceImpl implements IAuthService {
     private final IUserAlertSubscriptionService subscriptionService;
     private final IOtpService otpService;
     private final ContactVerificationService contactVerificationService;
+    private final GoogleTokenVerifier googleTokenVerifier;
 
     @Override
     @Transactional
@@ -118,9 +122,6 @@ public class AuthServiceImpl implements IAuthService {
         }
     }
 
-    @Value("${google.client.id:your-google-client-id}")
-    private String googleClientId;
-
     @Override
     @Transactional
     public void registerGoogle(RegisterGoogleRequest request) {
@@ -134,17 +135,8 @@ public class AuthServiceImpl implements IAuthService {
         }
 
         try {
-            // Khởi tạo GoogleIdTokenVerifier
-            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
-                    // Tạm thời comment dòng dưới lại nếu muốn test mà chưa có Client ID thật, 
-                    // nhưng khi lên Production bắt buộc phải set Audience để bảo mật.
-                    // .setAudience(Collections.singletonList(googleClientId))
-                    .build();
-
-            GoogleIdToken idToken = verifier.verify(request.getIdToken());
-            if (idToken != null) {
-                GoogleIdToken.Payload payload = idToken.getPayload();
-
+            GoogleIdToken.Payload payload = googleTokenVerifier.verify(request.getIdToken());
+            if (payload != null) {
                 // Trích xuất thông tin từ token Google
                 String email = payload.getEmail();
                 String name = (String) payload.get("name");
@@ -189,6 +181,59 @@ public class AuthServiceImpl implements IAuthService {
         } catch (Exception e) {
             throw new RuntimeException("Lỗi xác thực Google Token: " + e.getMessage());
         }
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse loginGoogle(LoginGoogleRequest request, HttpServletResponse response) {
+        GoogleIdToken.Payload payload = googleTokenVerifier.verify(request.getIdToken());
+        if (payload == null) {
+            throw new BadRequestException("Google ID Token không hợp lệ hoặc đã hết hạn");
+        }
+
+        String email = payload.getEmail();
+        if (!StringUtils.hasText(email)) {
+            throw new BadRequestException("Không thể lấy email từ Google ID Token");
+        }
+
+        String normalizedEmail = email.trim().toLowerCase();
+
+        User user = userRepository.findByEmail(normalizedEmail)
+                .or(() -> userRepository.findByEmail(email.trim()))
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản với email '" + email + "' chưa được đăng ký trong hệ thống. Vui lòng đăng ký trước."));
+
+        if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus()) ||
+            UserStatus.INACTIVE.name().equalsIgnoreCase(user.getStatus()) ||
+            UserStatus.SUSPENDED.name().equalsIgnoreCase(user.getStatus())) {
+            throw new UnauthorizedException("Your account is " + user.getStatus().toLowerCase() + ". Please contact support.");
+        }
+
+        user.setLastLoginAt(applicationClock != null ? LocalDateTime.now(applicationClock) : LocalDateTime.now());
+        userRepository.save(user);
+
+        UserPrincipal userPrincipal = UserPrincipal.create(user);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(userPrincipal, null, userPrincipal.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        String roleName = user.getRole() != null ? user.getRole().getName() : RoleEnum.REGISTERED_USER.name();
+        String accessToken = tokenProvider.generateAccessTokenForUser(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                roleName
+        );
+        String refreshToken = tokenProvider.generateRefreshToken();
+
+        refreshTokenRepository.deleteByUser(user);
+        saveRefreshToken(user, refreshToken);
+
+        setRefreshTokenCookie(response, refreshToken);
+
+        log.info("User logged in successfully via Google: {}", user.getEmail());
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .build();
     }
 
     @Override

@@ -10,8 +10,18 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
       - JWT_REFRESH_EXPIRATION_MS=${JWT_REFRESH_EXPIRATION_MS}
+      - SPRING_DATA_REDIS_HOST=scamshield-redis
+      - SPRING_DATA_REDIS_PORT=6379
     depends_on:
       - scamshield-db
+      - scamshield-redis
+    networks:
+      - scamshield-net
+
+  scamshield-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
     networks:
       - scamshield-net
 
