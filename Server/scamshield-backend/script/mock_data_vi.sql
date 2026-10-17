@@ -19,7 +19,11 @@ INSERT INTO reputation_ranks (name, min_points, max_points, description) VALUES
 INSERT INTO scam_categories (code, name, description, version, is_active, created_at, updated_at) VALUES
 ('VIEC_LAM', 'Lừa đảo việc làm, CTV', 'Tuyển CTV làm nhiệm vụ ảo, chốt đơn hàng', 1, true, NOW(), NOW()),
 ('TRUNG_THUONG', 'Lừa đảo trúng thưởng', 'Yêu cầu nộp phí nhận quà', 1, true, NOW(), NOW()),
-('GIA_DANH_CQCN', 'Giả danh cơ quan chức năng', 'Giả công an, tòa án dọa bắt giam', 1, true, NOW(), NOW());
+('GIA_DANH_CQCN', 'Giả danh cơ quan chức năng', 'Giả công an, tòa án dọa bắt giam', 1, true, NOW(), NOW()),
+('VIEN_THONG', 'Giả Mạo Viễn Thông', 'Giả mạo nhà mạng khóa chiều thuê bao', 1, true, NOW(), NOW()),
+('MALWARE', 'Giả Mạo VNeID / Malware', 'Mã độc đánh cắp tài khoản và OTP', 1, true, NOW(), NOW()),
+('CSGT', 'Giả Mạo Cảnh Sát Giao Thông', 'Thông báo phạt nguội phương tiện giả mạo', 1, true, NOW(), NOW()),
+('FOREX', 'Sàn Forex / Tiền Ảo', 'Cam kết lợi nhuận 3.5%/ngày bảo hiểm vốn ảo', 1, true, NOW(), NOW());
 
 -- 4. users
 -- LƯU Ý: Mật khẩu của tất cả user dưới đây đều là: 123456 (đã được băm bằng BCrypt)
@@ -57,11 +61,22 @@ INSERT INTO rate_limit_policies (name, scope, max_requests, window_seconds, enab
 INSERT INTO indicators (type, normalized_value, display_value, created_at, updated_at) VALUES
 ('PHONE', '0987654321', '0987.654.321', NOW(), NOW()),
 ('URL', 'nhanqua-shopee.vip', 'http://nhanqua-shopee.vip', NOW(), NOW()),
-('URL', 'shopee.vn', 'https://shopee.vn', NOW(), NOW());
+('URL', 'shopee.vn', 'https://shopee.vn', NOW(), NOW()),
+('PHONE', '0912443882', '+84 912.443.882', NOW(), NOW()),
+('URL', 'dichvucong-vneid-capnhat.gov-vn.info/apk', 'https://dichvucong-vneid-capnhat.gov-vn.info/ap...', NOW(), NOW()),
+('SMS_BANK', 'vietcombank', 'SMS Brandname: Vietcombank', NOW(), NOW()),
+('TELEGRAM', '@tuyendungshopeemall_hr', 'Zalo/Telegram: @TuyenDungShopeeMall_HR', NOW(), NOW()),
+('BANK_ACCOUNT', '104889201992', 'STK: 104889201992 - VPBank (VU HOANG ANH)', NOW(), NOW()),
+('TRAFFIC_FINE', 'tra-cuu-phatnguoi-c08.top/bienban', 'http://tra-cuu-phatnguoi-c08.top/bienban', NOW(), NOW()),
+('CRYPTO', 'binance-vip-asia-trade.cc', 'https://binance-vip-asia-trade.cc', NOW(), NOW());
 
 -- 13. confirmed_indicators
 INSERT INTO confirmed_indicators (indicator_id, category_id, status, confirmed_by, confirmed_at) VALUES
-((SELECT id FROM indicators WHERE normalized_value='nhanqua-shopee.vip'), (SELECT id FROM scam_categories WHERE code='VIEC_LAM'), 'ACTIVE', (SELECT id FROM users WHERE email='admin@scamshield.vn'), NOW());
+((SELECT id FROM indicators WHERE normalized_value='nhanqua-shopee.vip'), (SELECT id FROM scam_categories WHERE code='VIEC_LAM'), 'ACTIVE', (SELECT id FROM users WHERE email='admin@scamshield.vn'), NOW()),
+((SELECT id FROM indicators WHERE normalized_value='0912443882'), (SELECT id FROM scam_categories WHERE code='VIEN_THONG'), 'ACTIVE', (SELECT id FROM users WHERE email='admin@scamshield.vn'), NOW() + INTERVAL '1 hour'),
+((SELECT id FROM indicators WHERE normalized_value='dichvucong-vneid-capnhat.gov-vn.info/apk'), (SELECT id FROM scam_categories WHERE code='MALWARE'), 'ACTIVE', (SELECT id FROM users WHERE email='admin@scamshield.vn'), NOW()),
+((SELECT id FROM indicators WHERE normalized_value='tra-cuu-phatnguoi-c08.top/bienban'), (SELECT id FROM scam_categories WHERE code='CSGT'), 'ACTIVE', (SELECT id FROM users WHERE email='admin@scamshield.vn'), NOW()),
+((SELECT id FROM indicators WHERE normalized_value='binance-vip-asia-trade.cc'), (SELECT id FROM scam_categories WHERE code='FOREX'), 'ACTIVE', (SELECT id FROM users WHERE email='admin@scamshield.vn'), NOW());
 
 -- 14. partner_profiles
 INSERT INTO partner_profiles (user_id, legal_name, brand_name, partner_type, verification_status, created_at) VALUES
@@ -69,15 +84,28 @@ INSERT INTO partner_profiles (user_id, legal_name, brand_name, partner_type, ver
 
 -- 15. whitelist_entries
 INSERT INTO whitelist_entries (partner_id, indicator_id, verification_status, auto_lock_moderation, created_at) VALUES
-((SELECT id FROM partner_profiles WHERE brand_name='Shopee'), (SELECT id FROM indicators WHERE normalized_value='shopee.vn'), 'VERIFIED', true, NOW());
+((SELECT id FROM partner_profiles WHERE brand_name='Shopee'), (SELECT id FROM indicators WHERE normalized_value='shopee.vn'), 'VERIFIED', true, NOW()),
+((SELECT id FROM partner_profiles WHERE brand_name='Shopee'), (SELECT id FROM indicators WHERE normalized_value='vietcombank'), 'VERIFIED', true, NOW());
 
 -- 16. check_requests
-INSERT INTO check_requests (user_id, input_type, status, created_at) VALUES
-((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'URL', 'COMPLETED', NOW());
+INSERT INTO check_requests (user_id, input_type, raw_input, normalized_input, masked_input, status, created_at) VALUES
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'PHONE', 'Thông báo thuê bao sẽ bị khóa chiều sau 2 giờ do vi phạm quy định viễn thông...', '0912443882', '+84 912.443.882', 'COMPLETED', NOW() - INTERVAL '1 hour'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'URL', 'Link yêu cầu tải file APK "Dịch vụ công Bộ Công An v2.8" giả mạo đánh cắp mã OTP.', 'dichvucong-vneid-capnhat.gov-vn.info/apk', 'https://dichvucong-vneid-capnhat.gov-vn.info/ap...', 'COMPLETED', NOW() - INTERVAL '3 hours'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'SMS_BANK', '"VCB Digibank: QK dang thuc hien giao dich 2,500,000 VND tai he thong POS..."', 'vietcombank', 'SMS Brandname: Vietcombank', 'COMPLETED', NOW() - INTERVAL '6 hours'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'TELEGRAM', '"Việc nhẹ làm tại nhà 400k-800k/ngày, duyệt đơn hàng nhận hoa hồng ngay lập tức..."', '@tuyendungshopeemall_hr', 'Zalo/Telegram: @TuyenDungShopeeMall_HR', 'COMPLETED', NOW() - INTERVAL '12 hours'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'BANK_ACCOUNT', 'Tài khoản cá nhân giao dịch mua bán đồ gia dụng online trên hội nhóm mạng xã hội.', '104889201992', 'STK: 104889201992 - VPBank (VU HOANG ANH)', 'COMPLETED', NOW() - INTERVAL '1 day'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'TRAFFIC_FINE', '"Cục Cảnh sát giao thông thông báo phương tiện 29A-883.xx có biên bản phạt nguội..."', 'tra-cuu-phatnguoi-c08.top/bienban', 'http://tra-cuu-phatnguoi-c08.top/bienban', 'COMPLETED', NOW() - INTERVAL '2 days'),
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), 'CRYPTO', '"Nạp USDT cam kết lợi nhuận 3.5%/ngày, bảo hiểm vốn 100% bởi quỹ ủy thác..."', 'binance-vip-asia-trade.cc', 'https://binance-vip-asia-trade.cc', 'COMPLETED', NOW() - INTERVAL '3 days');
 
 -- 17. extracted_iocs
 INSERT INTO extracted_iocs (check_request_id, indicator_id, extraction_method, created_at) VALUES
-((SELECT id FROM check_requests LIMIT 1), (SELECT id FROM indicators WHERE normalized_value='nhanqua-shopee.vip'), 'REGEX', NOW());
+((SELECT id FROM check_requests WHERE normalized_input='0912443882' LIMIT 1), (SELECT id FROM indicators WHERE normalized_value='0912443882'), 'REGEX', NOW()),
+((SELECT id FROM check_requests WHERE normalized_input='dichvucong-vneid-capnhat.gov-vn.info/apk' LIMIT 1), (SELECT id FROM indicators WHERE normalized_value='dichvucong-vneid-capnhat.gov-vn.info/apk'), 'REGEX', NOW()),
+((SELECT id FROM check_requests WHERE normalized_input='vietcombank' LIMIT 1), (SELECT id FROM indicators WHERE normalized_value='vietcombank'), 'REGEX', NOW()),
+((SELECT id FROM check_requests WHERE normalized_input='@tuyendungshopeemall_hr' LIMIT 1), (SELECT id FROM indicators WHERE normalized_value='@tuyendungshopeemall_hr'), 'REGEX', NOW()),
+((SELECT id FROM check_requests WHERE normalized_input='104889201992' LIMIT 1), (SELECT id FROM indicators WHERE normalized_value='104889201992'), 'REGEX', NOW()),
+((SELECT id FROM check_requests WHERE normalized_input='tra-cuu-phatnguoi-c08.top/bienban' LIMIT 1), (SELECT id FROM indicators WHERE normalized_value='tra-cuu-phatnguoi-c08.top/bienban'), 'REGEX', NOW()),
+((SELECT id FROM check_requests WHERE normalized_input='binance-vip-asia-trade.cc' LIMIT 1), (SELECT id FROM indicators WHERE normalized_value='binance-vip-asia-trade.cc'), 'REGEX', NOW());
 
 -- 18. rule_definitions
 INSERT INTO rule_definitions (code, name, rule_type, version, is_active, is_frozen, created_at, updated_at) VALUES
