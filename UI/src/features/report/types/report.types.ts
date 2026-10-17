@@ -51,3 +51,39 @@ export interface CreateReportPayload {
   attachments: string[]
   isConfirmed: boolean
 }
+
+export interface ReportStatusCounts {
+  all: number
+  pending: number
+  approvedBlacklist: number
+  mergedDuplicate: number
+  rejected: number
+}
+
+export interface ScamCategoryItem {
+  id: number
+  code: string
+  name: string
+  description?: string
+}
+
+export interface TrackingReportsFilterParams {
+  search?: string
+  status?: string
+  categoryId?: number
+  days?: number
+  page?: number
+  size?: number
+  sort?: string
+}
+
+export interface PaginatedTrackingReports {
+  items: TrackingReportItem[]
+  currentPage: number
+  totalItems: number
+  totalPages: number
+  pageSize: number
+  hasNext: boolean
+  hasPrevious: boolean
+}
+
