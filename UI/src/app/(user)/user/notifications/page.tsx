@@ -28,6 +28,7 @@ import {
   NotificationTabCounts,
   NotificationType,
 } from "@/features/notification/types/notification.types"
+import { useNotificationStore } from "@/features/notification/store/notification.store"
 
 const ICON_MAP: Record<string, React.ComponentType<any>> = {
   SealCheck,
@@ -53,6 +54,13 @@ export default function UserNotificationsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalItems, setTotalItems] = useState(0)
 
+  const setStoreUnreadCount = useNotificationStore(
+    (state) => state.setUnreadCount
+  )
+  const decrementStoreUnreadCount = useNotificationStore(
+    (state) => state.decrementUnreadCount
+  )
+
   // Fetch notifications based on activeTab, unreadOnly, and currentPage
   const fetchNotifications = useCallback(
     async (pageToLoad: number) => {
@@ -66,6 +74,7 @@ export default function UserNotificationsPage() {
         })
         setNotifications(res.items)
         setTabCounts(res.tabCounts)
+        setStoreUnreadCount(res.tabCounts.unread)
         setTotalPages(Math.max(1, res.totalPages))
         setTotalItems(res.totalItems)
       } catch (err) {
@@ -75,7 +84,7 @@ export default function UserNotificationsPage() {
         setIsLoading(false)
       }
     },
-    [activeTab, unreadOnly]
+    [activeTab, unreadOnly, setStoreUnreadCount]
   )
 
   useEffect(() => {
@@ -97,6 +106,7 @@ export default function UserNotificationsPage() {
           prev.map((n) => ({ ...n, unread: false, isRead: true }))
         )
         setTabCounts((prev) => ({ ...prev, unread: 0 }))
+        setStoreUnreadCount(0)
         toast.success("Đã đánh dấu tất cả thông báo là đã đọc")
       }
     } catch (err) {
@@ -121,6 +131,7 @@ export default function UserNotificationsPage() {
       ...prev,
       unread: Math.max(0, prev.unread - 1),
     }))
+    decrementStoreUnreadCount()
 
     try {
       await markNotificationAsRead(notif.id)
