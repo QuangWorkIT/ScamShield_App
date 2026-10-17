@@ -147,6 +147,9 @@ public class AuthServiceImpl implements IAuthService {
         if (!StringUtils.hasText(email)) {
             throw new BadRequestException("Không thể lấy email từ Google ID Token");
         }
+        if (!Boolean.TRUE.equals(payload.getEmailVerified())) {
+            throw new BadRequestException("Email từ tài khoản Google chưa được xác thực");
+        }
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
 
         // Kiểm tra email đã tồn tại trong hệ thống chưa
@@ -242,6 +245,9 @@ public class AuthServiceImpl implements IAuthService {
         String email = payload.getEmail();
         if (!StringUtils.hasText(email)) {
             throw new BadRequestException("Không thể lấy email từ Google ID Token");
+        }
+        if (!Boolean.TRUE.equals(payload.getEmailVerified())) {
+            throw new BadRequestException("Email từ tài khoản Google chưa được xác thực");
         }
 
         String normalizedEmail = email.trim().toLowerCase();

@@ -149,6 +149,7 @@ class AuthServiceTest {
         LoginGoogleRequest request = new LoginGoogleRequest("valid_google_token");
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail("testuser@example.com");
+        payload.setEmailVerified(true);
         payload.set("name", "Test User");
 
         when(googleTokenVerifier.verify("valid_google_token")).thenReturn(payload);
@@ -170,6 +171,7 @@ class AuthServiceTest {
         LoginGoogleRequest request = new LoginGoogleRequest("unregistered_token");
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail("notfound@example.com");
+        payload.setEmailVerified(true);
 
         when(googleTokenVerifier.verify("unregistered_token")).thenReturn(payload);
         when(userRepository.findByEmail("notfound@example.com")).thenReturn(Optional.empty());
@@ -187,10 +189,23 @@ class AuthServiceTest {
     }
 
     @Test
+    void loginGoogle_EmailNotVerified_ThrowsBadRequestException() {
+        LoginGoogleRequest request = new LoginGoogleRequest("unverified_token");
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("unverified@example.com");
+        payload.setEmailVerified(false);
+
+        when(googleTokenVerifier.verify("unverified_token")).thenReturn(payload);
+
+        assertThrows(BadRequestException.class, () -> authService.loginGoogle(request, null));
+    }
+
+    @Test
     void loginGoogle_BannedUser_ThrowsUnauthorizedException() {
         LoginGoogleRequest request = new LoginGoogleRequest("banned_token");
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail("banned@example.com");
+        payload.setEmailVerified(true);
 
         User bannedUser = User.builder()
                 .id(2L)
@@ -217,6 +232,7 @@ class AuthServiceTest {
 
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail("newuser@example.com");
+        payload.setEmailVerified(true);
         payload.set("name", "New Google User");
 
         when(userRepository.findByPhoneNumber("0912345678")).thenReturn(Optional.empty());
@@ -253,6 +269,7 @@ class AuthServiceTest {
 
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail("newuser@example.com");
+        payload.setEmailVerified(true);
         payload.set("name", "New Google User");
 
         when(userRepository.findByPhoneNumber("0912345678")).thenReturn(Optional.empty());
@@ -310,6 +327,7 @@ class AuthServiceTest {
 
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail("existing@example.com");
+        payload.setEmailVerified(true);
 
         when(userRepository.findByPhoneNumber("0912345678")).thenReturn(Optional.empty());
         when(googleTokenVerifier.verify("valid_google_token")).thenReturn(payload);
@@ -333,6 +351,24 @@ class AuthServiceTest {
     }
 
     @Test
+    void registerGoogle_EmailNotVerified_ThrowsBadRequestException() {
+        RegisterGoogleRequest request = RegisterGoogleRequest.builder()
+                .idToken("unverified_token")
+                .phoneNumber("0912345678")
+                .agreeTerms(true)
+                .build();
+
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("unverified@example.com");
+        payload.setEmailVerified(false);
+
+        when(userRepository.findByPhoneNumber("0912345678")).thenReturn(Optional.empty());
+        when(googleTokenVerifier.verify("unverified_token")).thenReturn(payload);
+
+        assertThrows(BadRequestException.class, () -> authService.registerGoogle(request, null));
+    }
+
+    @Test
     void registerGoogle_MissingVerification_ThrowsBadRequestException() {
         RegisterGoogleRequest request = RegisterGoogleRequest.builder()
                 .idToken("valid_google_token")
@@ -342,6 +378,7 @@ class AuthServiceTest {
 
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail("newuser@example.com");
+        payload.setEmailVerified(true);
 
         when(userRepository.findByPhoneNumber("0912345678")).thenReturn(Optional.empty());
         when(googleTokenVerifier.verify("valid_google_token")).thenReturn(payload);
