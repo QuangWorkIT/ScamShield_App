@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -23,6 +24,7 @@ import {
   getActiveUserNavItem,
 } from "@/config/navigation/user-nav"
 import { useLogout } from "@/hooks/use-logout"
+import { useNotificationStore } from "@/features/notification/store/notification.store"
 import { cn } from "@/lib/utils"
 
 interface UserSidebarProps {
@@ -34,6 +36,11 @@ export function UserSidebar({ className, onCloseMobile }: UserSidebarProps) {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const handleLogout = useLogout()
+  const { unreadCount, fetchUnreadCount } = useNotificationStore()
+
+  useEffect(() => {
+    fetchUnreadCount()
+  }, [fetchUnreadCount])
 
   // Only the most specific matching nav item is highlighted
   const activeHref = getActiveUserNavItem(pathname)?.href
@@ -153,18 +160,28 @@ export function UserSidebar({ className, onCloseMobile }: UserSidebarProps) {
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  {item.badge && (
-                    <span
-                      className={cn(
-                        "py-0.2 rounded-full px-1.5 text-[10px] font-bold text-white",
-                        item.badgeVariant === "danger"
-                          ? "bg-[#BA1A1A]"
-                          : "bg-primary"
-                      )}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
+                  {(() => {
+                    const badge =
+                      item.href === "/user/notifications"
+                        ? unreadCount
+                        : item.badge
+                    if (!badge) return null
+                    if (typeof badge === "number" && badge <= 0) return null
+                    const displayBadge =
+                      typeof badge === "number" && badge > 99 ? "99+" : badge
+                    return (
+                      <span
+                        className={cn(
+                          "py-0.2 rounded-full px-1.5 text-[10px] font-bold text-white",
+                          item.badgeVariant === "danger"
+                            ? "bg-[#BA1A1A]"
+                            : "bg-primary"
+                        )}
+                      >
+                        {displayBadge}
+                      </span>
+                    )
+                  })()}
                   {isActive && (
                     <CaretRight
                       size={12}
