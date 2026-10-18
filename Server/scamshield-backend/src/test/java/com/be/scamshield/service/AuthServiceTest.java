@@ -1,15 +1,20 @@
 package com.be.scamshield.service;
 
 import com.be.scamshield.dto.*;
+import com.be.scamshield.dto.request.LoginGoogleRequest;
 import com.be.scamshield.entity.RefreshToken;
 import com.be.scamshield.entity.Role;
 import com.be.scamshield.entity.User;
 import com.be.scamshield.exception.BadRequestException;
+import com.be.scamshield.exception.ResourceNotFoundException;
+import com.be.scamshield.exception.UnauthorizedException;
 import com.be.scamshield.repository.RefreshTokenRepository;
 import com.be.scamshield.repository.UserRepository;
+import com.be.scamshield.security.GoogleTokenVerifier;
 import com.be.scamshield.security.JwtTokenProvider;
 import com.be.scamshield.security.UserPrincipal;
 import com.be.scamshield.serviceImpl.AuthServiceImpl;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +46,8 @@ class AuthServiceTest {
     private AuthenticationManager authenticationManager;
     @Mock
     private JwtTokenProvider tokenProvider;
+    @Mock
+    private GoogleTokenVerifier googleTokenVerifier;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -122,5 +129,66 @@ class AuthServiceTest {
         when(passwordEncoder.matches("WrongPassword", "encodedOldPassword")).thenReturn(false);
 
         assertThrows(BadRequestException.class, () -> authService.changePassword("testuser@example.com", request));
+    }
+
+    @Test
+    void loginGoogle_Success() {
+        LoginGoogleRequest request = new LoginGoogleRequest("valid_google_token");
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("testuser@example.com");
+        payload.set("name", "Test User");
+
+        when(googleTokenVerifier.verify("valid_google_token")).thenReturn(payload);
+        when(userRepository.findByEmail("testuser@example.com")).thenReturn(Optional.of(sampleUser));
+        when(tokenProvider.generateAccessTokenForUser(1L, "testuser@example.com", "testuser@example.com", "REGISTERED_USER"))
+                .thenReturn("mockGoogleAccessToken");
+        when(tokenProvider.generateRefreshToken()).thenReturn("mockGoogleRefreshToken");
+
+        AuthResponse response = authService.loginGoogle(request, null);
+
+        assertNotNull(response);
+        assertEquals("mockGoogleAccessToken", response.getAccessToken());
+        verify(userRepository, times(1)).save(sampleUser);
+        verify(refreshTokenRepository, times(1)).deleteByUser(sampleUser);
+    }
+
+    @Test
+    void loginGoogle_UserNotFound_ThrowsResourceNotFoundException() {
+        LoginGoogleRequest request = new LoginGoogleRequest("unregistered_token");
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("notfound@example.com");
+
+        when(googleTokenVerifier.verify("unregistered_token")).thenReturn(payload);
+        when(userRepository.findByEmail("notfound@example.com")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> authService.loginGoogle(request, null));
+    }
+
+    @Test
+    void loginGoogle_InvalidToken_ThrowsBadRequestException() {
+        LoginGoogleRequest request = new LoginGoogleRequest("invalid_token");
+
+        when(googleTokenVerifier.verify("invalid_token")).thenReturn(null);
+
+        assertThrows(BadRequestException.class, () -> authService.loginGoogle(request, null));
+    }
+
+    @Test
+    void loginGoogle_BannedUser_ThrowsUnauthorizedException() {
+        LoginGoogleRequest request = new LoginGoogleRequest("banned_token");
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("banned@example.com");
+
+        User bannedUser = User.builder()
+                .id(2L)
+                .email("banned@example.com")
+                .status("BANNED")
+                .role(sampleRole)
+                .build();
+
+        when(googleTokenVerifier.verify("banned_token")).thenReturn(payload);
+        when(userRepository.findByEmail("banned@example.com")).thenReturn(Optional.of(bannedUser));
+
+        assertThrows(UnauthorizedException.class, () -> authService.loginGoogle(request, null));
     }
 }
