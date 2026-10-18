@@ -17,9 +17,17 @@ public interface IAuthService {
     void registerPersonal(RegisterPersonalRequest request);
 
     /**
-     * Registers or authenticates a Google OAuth user.
+     * Registers a new user account via Google ID Token with phone verification.
+     * Generates JWT access token and sets refresh token in HttpOnly cookie.
      */
-    void registerGoogle(RegisterGoogleRequest request);
+    AuthResponse registerGoogle(RegisterGoogleRequest request, HttpServletResponse response);
+
+    /**
+     * Registers a new user account via Google ID Token without setting cookies.
+     */
+    default void registerGoogle(RegisterGoogleRequest request) {
+        registerGoogle(request, null);
+    }
 
     /**
      * Authenticates user using Google ID Token.

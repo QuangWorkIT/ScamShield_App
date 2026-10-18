@@ -140,10 +140,13 @@ public class AuthController {
     }
 
     @PostMapping("/register/google")
-    @Operation(summary = "Đăng ký cá nhân qua Google")
-    public ResponseEntity<BaseResponse<Void>> registerGoogle(@Valid @RequestBody RegisterGoogleRequest request) {
-        authService.registerGoogle(request);
-        return ResponseEntity.ok(new BaseResponse<>(true, "Google Registration successful", null));
+    @Operation(summary = "Đăng ký cá nhân qua Google",
+            description = "Xác thực qua Google ID Token kết hợp xác thực số điện thoại (hỗ trợ verificationToken từ /verify-contacts hoặc phoneOtp trực tiếp). Đăng ký thành công trả về accessToken và lưu refreshToken vào cookie.")
+    public ResponseEntity<BaseResponse<AuthResponse>> registerGoogle(
+            @Valid @RequestBody RegisterGoogleRequest request,
+            HttpServletResponse response) {
+        AuthResponse authResponse = authService.registerGoogle(request, response);
+        return ResponseEntity.ok(new BaseResponse<>(true, "Google Registration successful", authResponse));
     }
 
     private String extractCookie(HttpServletRequest request, String name) {

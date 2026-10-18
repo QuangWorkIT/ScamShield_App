@@ -51,6 +51,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -124,63 +125,113 @@ public class AuthServiceImpl implements IAuthService {
 
     @Override
     @Transactional
-    public void registerGoogle(RegisterGoogleRequest request) {
+    public AuthResponse registerGoogle(RegisterGoogleRequest request, HttpServletResponse response) {
         if (!request.isAgreeTerms()) {
-            throw new IllegalArgumentException("You must agree to the terms.");
+            throw new BadRequestException("Bạn phải đồng ý với điều khoản sử dụng");
         }
+
+        String phone = VietnamPhoneNumbers.nationalMobile(request.getPhoneNumber());
 
         // Kiểm tra xem số điện thoại đã tồn tại chưa
-        if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
-            throw new IllegalArgumentException("Phone number already exists.");
+        if (userRepository.findByPhoneNumber(phone).isPresent()) {
+            throw new RegistrationConflictException("Số điện thoại đã được dùng cho một tài khoản");
         }
 
+        GoogleIdToken.Payload payload = googleTokenVerifier.verify(request.getIdToken());
+        if (payload == null) {
+            throw new BadRequestException("Google ID Token không hợp lệ hoặc đã hết hạn");
+        }
+
+        // Trích xuất thông tin từ token Google
+        String email = payload.getEmail();
+        if (!StringUtils.hasText(email)) {
+            throw new BadRequestException("Không thể lấy email từ Google ID Token");
+        }
+        if (!Boolean.TRUE.equals(payload.getEmailVerified())) {
+            throw new BadRequestException("Email từ tài khoản Google chưa được xác thực");
+        }
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+
+        // Kiểm tra email đã tồn tại trong hệ thống chưa
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
+            throw new RegistrationConflictException("Email đã được dùng cho một tài khoản. Vui lòng đăng nhập.");
+        }
+
+        String name = (String) payload.get("name");
+        if (!StringUtils.hasText(name)) {
+            name = normalizedEmail.split("@")[0];
+        }
+
+        // Xác thực số điện thoại qua verificationToken hoặc phoneOtp
+        if (StringUtils.hasText(request.getVerificationToken())) {
+            contactVerificationService.consume(request.getVerificationToken(), phone);
+        } else if (StringUtils.hasText(request.getPhoneOtp())) {
+            otpService.verifyOtp(phone, request.getPhoneOtp(), OtpType.PHONE);
+        } else {
+            throw new BadRequestException("Cần xác thực số điện thoại trước khi đăng ký (thiếu verificationToken hoặc phoneOtp)");
+        }
+
+        // Gán quyền REGISTERED_USER
+        Role userRole = roleRepository.findByName(RoleEnum.REGISTERED_USER.name())
+                .orElseThrow(() -> new IllegalStateException("Chưa cấu hình role REGISTERED_USER"));
+
+        // Tạo mật khẩu ngẫu nhiên (vì user đăng ký qua Google)
+        String randomPassword = UUID.randomUUID().toString();
+        LocalDateTime now = applicationClock != null ? LocalDateTime.now(applicationClock) : LocalDateTime.now();
+
+        User user = User.builder()
+                .fullName(name)
+                .phoneNumber(phone)
+                .isPhoneVerified(true)
+                .email(normalizedEmail)
+                .passwordHash(passwordEncoder.encode(randomPassword))
+                .role(userRole)
+                .status(UserStatus.ACTIVE.name())
+                .reputationPoints(0)
+                .createdAt(now)
+                .updatedAt(now)
+                .lastLoginAt(now)
+                .build();
+
+        User savedUser;
         try {
-            GoogleIdToken.Payload payload = googleTokenVerifier.verify(request.getIdToken());
-            if (payload != null) {
-                // Trích xuất thông tin từ token Google
-                String email = payload.getEmail();
-                String name = (String) payload.get("name");
-
-                // Kiểm tra email đã tồn tại trong hệ thống chưa
-                if (userRepository.findByEmail(email).isPresent()) {
-                    throw new IllegalArgumentException("Email already exists in the system. Please login instead.");
-                }
-
-                // Gán quyền REGISTERED_USER
-                Role userRole = roleRepository.findByName(RoleEnum.REGISTERED_USER.name())
-                        .orElseThrow(() -> new RuntimeException("Role not found"));
-
-                otpService.verifyOtp(request.getPhoneNumber(), request.getPhoneOtp(), OtpType.PHONE);
-
-                // Tạo mật khẩu ngẫu nhiên (vì user login qua Google)
-                String randomPassword = UUID.randomUUID().toString();
-
-                User user = User.builder()
-                        .fullName(name)
-                        .phoneNumber(request.getPhoneNumber())
-                        .email(email)
-                        .passwordHash(passwordEncoder.encode(randomPassword))
-                        .role(userRole)
-                        .status("ACTIVE")
-                        .reputationPoints(0)
-                        .createdAt(LocalDateTime.now(applicationClock))
-                        .updatedAt(LocalDateTime.now(applicationClock))
-                        .build();
-
-                User savedUser = userRepository.save(user);
-
-                if (request.isReceiveAlerts()) {
-                    subscriptionService.subscribeAllCategories(savedUser);
-                }
-
-            } else {
-                throw new IllegalArgumentException("Invalid Google ID token.");
+            savedUser = userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException ex) {
+            if (ex.getMostSpecificCause() instanceof SQLException sql && "23505".equals(sql.getSQLState())) {
+                throw new RegistrationConflictException("Email hoặc số điện thoại đã được dùng cho một tài khoản");
             }
-        } catch (IllegalArgumentException | BadRequestException | OtpRateLimitException | SmsProviderException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("Lỗi xác thực Google Token: " + e.getMessage());
+            throw ex;
         }
+
+        if (request.isReceiveAlerts()) {
+            subscriptionService.subscribeAllCategories(savedUser);
+        }
+
+        UserPrincipal userPrincipal = UserPrincipal.create(savedUser);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(userPrincipal, null, userPrincipal.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        String roleName = savedUser.getRole() != null ? savedUser.getRole().getName() : RoleEnum.REGISTERED_USER.name();
+        String accessToken = tokenProvider.generateAccessTokenForUser(
+                savedUser.getId(),
+                savedUser.getUsername(),
+                savedUser.getEmail(),
+                roleName
+        );
+        String refreshToken = tokenProvider.generateRefreshToken();
+
+        refreshTokenRepository.deleteByUser(savedUser);
+        saveRefreshToken(savedUser, refreshToken);
+
+        if (response != null) {
+            setRefreshTokenCookie(response, refreshToken);
+        }
+
+        log.info("User registered and logged in successfully via Google: {}", savedUser.getEmail());
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .build();
     }
 
     @Override
@@ -194,6 +245,9 @@ public class AuthServiceImpl implements IAuthService {
         String email = payload.getEmail();
         if (!StringUtils.hasText(email)) {
             throw new BadRequestException("Không thể lấy email từ Google ID Token");
+        }
+        if (!Boolean.TRUE.equals(payload.getEmailVerified())) {
+            throw new BadRequestException("Email từ tài khoản Google chưa được xác thực");
         }
 
         String normalizedEmail = email.trim().toLowerCase();
