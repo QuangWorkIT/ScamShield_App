@@ -8,10 +8,34 @@ import {
 import { ReportSummaryMetrics } from "@/features/report/types/report.types"
 
 interface ReportMetricsCardsProps {
-  metrics: ReportSummaryMetrics
+  metrics?: ReportSummaryMetrics
+  isLoading?: boolean
 }
 
-export function ReportMetricsCards({ metrics }: ReportMetricsCardsProps) {
+export function ReportMetricsCards({
+  metrics,
+  isLoading = false,
+}: ReportMetricsCardsProps) {
+  if (isLoading || !metrics) {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className="animate-pulse space-y-3 rounded-2xl border border-[#C6C6CE]/40 bg-white p-5 shadow-xs dark:border-border dark:bg-card"
+          >
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-28 rounded-md bg-slate-200 dark:bg-slate-700" />
+              <div className="size-9 rounded-xl bg-slate-100 dark:bg-slate-800" />
+            </div>
+            <div className="h-8 w-20 rounded-md bg-slate-200 dark:bg-slate-700" />
+            <div className="h-4 w-36 rounded-md bg-slate-100 dark:bg-slate-800" />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {/* Card 1: Tổng báo cáo */}
