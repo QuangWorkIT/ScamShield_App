@@ -12,6 +12,57 @@ export interface RefreshTokenResult {
 
 let activeRefreshPromise: Promise<RefreshTokenResult> | null = null;
 
+export interface VerifyContactsResult {
+    verificationToken: string;
+    expiresAt: string;
+}
+
+export interface RegisterPersonalPayload {
+    fullName: string;
+    phoneNumber: string;
+    email: string;
+    password: string;
+    verificationToken: string;
+    agreeTerms: boolean;
+    receiveAlerts: boolean;
+}
+
+export interface RegisterPartnerPayload {
+    legalName: string;
+    taxCode: string;
+    corporateEmail: string;
+    verificationToken: string;
+    password?: string;
+    representativeNameAndTitle: string;
+    contactPhone: string;
+    officialDomains: string;
+    officialHotlines: string;
+    smsBrandNames: string;
+    legalRepresentative: boolean;
+    agreeTerms: boolean;
+}
+
+export interface RegisterPartnerFiles {
+    businessLicenseFiles: File[];
+    ownershipProofFiles: File[];
+    authorizationFiles: File[];
+}
+
+export interface RegisterPartnerResponseData {
+    registrationId: number;
+    userId: number;
+    verificationStatus: string;
+    submittedAt: string;
+}
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+    if (axios.isAxiosError(error)) {
+        const data = error.response?.data
+        return data?.message || data?.error || fallback
+    }
+    return error instanceof Error ? error.message : fallback
+}
+
 export const authServices = {
     loginByForm: async function (identifier: string, password: string) {
         try {
@@ -92,5 +143,67 @@ export const authServices = {
             }
             throw new Error(message)
         }
-    }
+    },
+    sendPhoneOtp: async function (phoneNumber: string, recaptchaToken: string) {
+        try {
+            // Backend uses @RequestParam, so send form-urlencoded (token is too long for a query string)
+            const body = new URLSearchParams({ phoneNumber, recaptchaToken })
+            const response = await publicApi.post("/auth/send-phone-otp", body, {
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            })
+            return { message: response.data?.message as string }
+        } catch (error) {
+            throw new Error(extractErrorMessage(error, "Không thể gửi mã OTP."))
+        }
+    },
+    verifyContacts: async function (
+        phoneNumber: string,
+        phoneOtp: string
+    ): Promise<VerifyContactsResult> {
+        try {
+            const response = await publicApi.post("/auth/verify-contacts", {
+                phoneNumber,
+                phoneOtp,
+            })
+            return response.data.data as VerifyContactsResult
+        } catch (error) {
+            throw new Error(extractErrorMessage(error, "Xác thực OTP thất bại."))
+        }
+    },
+    registerPersonal: async function (payload: RegisterPersonalPayload) {
+        try {
+            const response = await publicApi.post("/auth/register/personal", payload)
+            return { message: response.data?.message as string }
+        } catch (error) {
+            throw new Error(extractErrorMessage(error, "Đăng ký thất bại."))
+        }
+    },
+    registerPartner: async function (
+        requestData: RegisterPartnerPayload,
+        files: RegisterPartnerFiles
+    ) {
+        try {
+            const formData = new FormData()
+            formData.append(
+                "request",
+                new Blob([JSON.stringify(requestData)], { type: "application/json" })
+            )
+            files.businessLicenseFiles.forEach((file) => {
+                formData.append("businessLicenseFiles", file)
+            })
+            files.ownershipProofFiles.forEach((file) => {
+                formData.append("ownershipProofFiles", file)
+            })
+            files.authorizationFiles.forEach((file) => {
+                formData.append("authorizationFiles", file)
+            })
+
+            const response = await publicApi.post("/partners/registrations", formData, {
+                headers: { "Content-Type": "multipart/form-data" },
+            })
+            return response.data
+        } catch (error) {
+            throw new Error(extractErrorMessage(error, "Đăng ký đối tác thất bại."))
+        }
+    },
 }

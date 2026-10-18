@@ -41,7 +41,16 @@ spring:
           starttls:
             enable: true
 
+  # Redis Configuration
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:${REDIS_HOST:localhost}}
+      port: ${SPRING_DATA_REDIS_PORT:${REDIS_PORT:6379}}
+      password: ${SPRING_DATA_REDIS_PASSWORD:${REDIS_PASSWORD:}}
+      timeout: 2000ms
+
 # Server Port
+
 server:
   port: 8080
 
@@ -50,6 +59,11 @@ firebase:
   phone:
     api-key: ${FIREBASE_WEB_API_KEY:}
     max-requests-per24-hours: ${SMS_OTP_MAX_REQUESTS_PER_24_HOURS:10}
+
+# Google OAuth Configuration
+google:
+  client:
+    id: ${GOOGLE_CLIENT_ID:your-google-client-id}
 
 # Application Configurations
 app:

@@ -90,14 +90,13 @@ class PartnerRegistrationServiceImplTest {
         request.setLegalName(" Công ty Example ");
         request.setTaxCode("0100112437");
         request.setCorporateEmail("CONTACT@EXAMPLE.COM.VN");
-        request.setPassword("Example123!");
         request.setVerificationToken("x".repeat(43));
 
         request.setRepresentativeNameAndTitle(" Trần Quốc Huy - Giám đốc ");
         request.setContactPhone("+84 912 345 678");
-        request.setOfficialDomains(List.of("Example.com.vn", "example.com.vn", "app.example.com.vn"));
-        request.setOfficialHotlines(List.of("1900 545413", "1900545413"));
-        request.setSmsBrandNames(List.of("Example", "EXAMPLE"));
+        request.setOfficialDomains("Example.com.vn");
+        request.setOfficialHotlines("1900 545413");
+        request.setSmsBrandNames("Example");
         request.setLegalRepresentative(true);
         request.setAgreeTerms(true);
         files = List.of(new MockMultipartFile("file", "proof.pdf", "application/pdf",
@@ -121,14 +120,14 @@ class PartnerRegistrationServiceImplTest {
         assertThat(registration.getValue().getLegalName()).isEqualTo("Công ty Example");
         assertThat(registration.getValue().getCorporateEmail()).isEqualTo("contact@example.com.vn");
         assertThat(registration.getValue().getContactPhone()).isEqualTo("0912345678");
-        assertThat(registration.getValue().getOfficialDomains()).containsExactly("example.com.vn", "app.example.com.vn");
-        assertThat(registration.getValue().getOfficialHotlines()).containsExactly("1900545413");
-        assertThat(registration.getValue().getSmsBrandNames()).containsExactly("EXAMPLE");
+        assertThat(registration.getValue().getOfficialDomain()).isEqualTo("example.com.vn");
+        assertThat(registration.getValue().getOfficialHotline()).isEqualTo("1900545413");
+        assertThat(registration.getValue().getSmsBrandName()).isEqualTo("EXAMPLE");
         assertThat(registration.getValue().getUser().getId()).isEqualTo(7L);
         assertThat(registration.getValue().getUser().getPasswordHash()).isEqualTo("encoded-password");
         assertThat(registration.getValue().getUser().getStatus()).isEqualTo(UserStatus.INACTIVE.name());
         assertThat(registration.getValue().getUser().getRole().getName()).isEqualTo(RoleEnum.BUSINESS_PARTNER.name());
-        verify(passwordEncoder).encode("Example123!");
+        verify(passwordEncoder).encode(any(String.class));
         verifyNoInteractions(otpService);
 
         verify(documentRepository).saveAll(documents.capture());
@@ -178,14 +177,22 @@ class PartnerRegistrationServiceImplTest {
         ArgumentCaptor<PartnerProfile> registration = ArgumentCaptor.forClass(PartnerProfile.class);
         verify(profileRepository).saveAndFlush(registration.capture());
         assertThat(registration.getValue().getCorporateEmail()).isEqualTo(email);
-        assertThat(registration.getValue().getOfficialDomains()).contains("example.com.vn");
+        assertThat(registration.getValue().getOfficialDomain()).isEqualTo("example.com.vn");
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"https://example.com.vn", "example.com.vn/path", "127.0.0.1", "example..com.vn"})
     void rejectsUrlsAndInvalidHostnames(String domain) {
-        request.setOfficialDomains(List.of(domain));
+        request.setOfficialDomains(domain);
         assertThatThrownBy(() -> service.register(request, files, files, null)).isInstanceOf(BadRequestException.class);
+        assertNoWrites();
+    }
+
+    @Test
+    void rejectsMultipleOfficialValuesForOneProfile() {
+        request.setOfficialDomains("example.com.vn, app.example.com.vn");
+        assertThatThrownBy(() -> service.register(request, files, files, null))
+                .isInstanceOf(BadRequestException.class);
         assertNoWrites();
     }
 
@@ -270,10 +277,10 @@ class PartnerRegistrationServiceImplTest {
     }
 
     @Test
-    void rejectsPasswordExceedingBcryptByteLimitBeforeCreatingAccount() {
-        request.setPassword("ậ".repeat(25));
+    void requiresLegalRepresentativeStatusBeforeCreatingAccount() {
+        request.setLegalRepresentative(null);
         assertThatThrownBy(() -> service.register(request, files, files, null))
-                .isInstanceOf(BadRequestException.class).hasMessageContaining("72 byte");
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("đại diện pháp luật");
         assertNoWrites();
     }
 
@@ -324,7 +331,7 @@ class PartnerRegistrationServiceImplTest {
         when(verificationRepository.findLockedByTokenHash(any())).thenReturn(Optional.of(grant));
         when(roleRepository.findByName(RoleEnum.BUSINESS_PARTNER.name()))
                 .thenReturn(Optional.of(Role.builder().name(RoleEnum.BUSINESS_PARTNER.name()).build()));
-        when(passwordEncoder.encode("Example123!")).thenReturn("encoded-password");
+        when(passwordEncoder.encode(any(String.class))).thenReturn("encoded-password");
         when(userRepository.saveAndFlush(any())).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
             user.setId(7L);
