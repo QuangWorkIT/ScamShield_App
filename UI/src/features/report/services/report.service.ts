@@ -4,87 +4,183 @@ import {
   TrackingReportItem,
   ReportSummaryMetrics,
   CreateReportPayload,
+  ReportStatusCounts,
+  ScamCategoryItem,
+  TrackingReportsFilterParams,
+  PaginatedTrackingReports,
 } from "../types/report.types"
 
-export const MOCK_SUMMARY_METRICS: ReportSummaryMetrics = {
-  totalReports: 18,
-  recentReports7Days: 4,
-  blacklistedCount: 14,
-  queriesProtected: 3200,
-  accuracyRate: 93.3,
-  rankTitle: "A+ Chuyên Gia",
-  reputationPoints: 700,
-  currentTierProgress: 600,
-  maxTierPoints: 700,
+export const DEFAULT_SUMMARY_METRICS: ReportSummaryMetrics = {
+  totalReports: 0,
+  recentReports7Days: 0,
+  blacklistedCount: 0,
+  queriesProtected: 0,
+  accuracyRate: 100,
+  rankTitle: "Sentinel Tân Thủ",
+  reputationPoints: 0,
+  currentTierProgress: 0,
+  maxTierPoints: 100,
 }
 
-export const MOCK_TRACKING_REPORTS: TrackingReportItem[] = [
-  {
-    id: "#RPT-8492",
-    hashId: "e9b4...2a1f",
-    targetType: "PHONE",
-    targetValue: "089.842.xxxx",
-    targetSub: "Đầu số MobiFone phát tán",
-    category: "Mạo danh cán bộ thuế/A05",
-    submittedDate: "14:22, 28/10/2024",
-    slaTime: "Xong trong 14 phút",
-    slaStatus: "completed",
-    evidenceBadge: "3 ảnh • OCR Pass",
-    status: "APPROVED_BLACKLIST",
-  },
-  {
-    id: "#RPT-8488",
-    hashId: "a102...cd78",
-    targetType: "BANK",
-    targetValue: "1903.6219.xxxx",
-    targetSub: "Techcombank (Đỗ Văn T...)",
-    category: "Tuyển CTV lừa nạp tiền",
-    submittedDate: "09:15, 29/10/2024",
-    slaTime: "Đang xử lý (32 phút)",
-    slaStatus: "processing",
-    evidenceBadge: "5 ảnh GD • Video",
-    status: "PENDING",
-  },
-  {
-    id: "#RPT-8470",
-    hashId: "c77e...410b",
-    targetType: "WEBSITE",
-    targetValue: "tpbank-ebank.xyz[...]",
-    targetSub: "Server IP: 104.21.xx.xx (Cloudflare)",
-    category: "Website Phishing đánh cắp OTP",
-    submittedDate: "18:04, 27/10/2024",
-    slaTime: "Xong trong 8 phút",
-    slaStatus: "completed",
-    evidenceBadge: "2 URL Log • HTML Raw",
-    status: "APPROVED_BLACKLIST",
-  },
-  {
-    id: "#RPT-8411",
-    hashId: "88aa...190e",
-    targetType: "TELEGRAM",
-    targetValue: "@invest_vip_vn",
-    targetSub: "Nhóm Telegram chứng khoán ảo",
-    category: "Lôi kéo đầu tư Forex/Crypto",
-    submittedDate: "11:00, 25/10/2024",
-    slaTime: "Tự động gộp chéo",
-    slaStatus: "merged",
-    evidenceBadge: "1 ảnh chụp nhóm",
-    status: "MERGED_DUPLICATE",
-  },
-  {
-    id: "#RPT-8390",
-    hashId: "512b...f0a4",
-    targetType: "APK",
-    targetValue: "DichVuCong_Fake.apk",
-    targetSub: "Chứa mã độc gián điệp Spyware",
-    category: "Giả mạo App VNeID / DVC",
-    submittedDate: "20:30, 22/10/2024",
-    slaTime: "Xong trong 25 phút",
-    slaStatus: "completed",
-    evidenceBadge: "Tệp APK • 12MB",
-    status: "APPROVED_BLACKLIST",
-  },
-]
+export const DEFAULT_STATUS_COUNTS: ReportStatusCounts = {
+  all: 0,
+  pending: 0,
+  approvedBlacklist: 0,
+  mergedDuplicate: 0,
+  rejected: 0,
+}
+
+/**
+ * Lấy thống kê tổng quan (4 metric cards) từ GET /api/user/reports/metrics
+ */
+export async function getReportSummaryMetrics(): Promise<ReportSummaryMetrics> {
+  try {
+    const res = await authorizeApi.get("/api/user/reports/metrics")
+    if (res.data?.success && res.data?.data) {
+      const d = res.data.data
+      return {
+        totalReports: Number(d.totalReports || 0),
+        recentReports7Days: Number(d.recentReports7Days || 0),
+        blacklistedCount: Number(d.blacklistedCount || 0),
+        queriesProtected: Number(d.queriesProtected || 0),
+        accuracyRate: Number(d.accuracyRate || 100),
+        rankTitle: d.rankTitle || "Sentinel Tân Thủ",
+        reputationPoints: Number(d.reputationPoints || 0),
+        currentTierProgress: Number(d.currentTierProgress || 0),
+        maxTierPoints: Number(d.maxTierPoints || 100),
+      }
+    }
+  } catch (error) {
+    console.warn("Không thể tải thống kê metrics, dùng dữ liệu mặc định:", error)
+  }
+  return DEFAULT_SUMMARY_METRICS
+}
+
+/**
+ * Lấy số lượng báo cáo theo trạng thái từ GET /api/user/reports/status-counts
+ */
+export async function getReportStatusCounts(): Promise<ReportStatusCounts> {
+  try {
+    const res = await authorizeApi.get("/api/user/reports/status-counts")
+    if (res.data?.success && res.data?.data) {
+      const d = res.data.data
+      return {
+        all: Number(d.all || 0),
+        pending: Number(d.pending || 0),
+        approvedBlacklist: Number(d.approvedBlacklist || 0),
+        mergedDuplicate: Number(d.mergedDuplicate || 0),
+        rejected: Number(d.rejected || 0),
+      }
+    }
+  } catch (error) {
+    console.warn("Không thể tải số lượng trạng thái báo cáo:", error)
+  }
+  return DEFAULT_STATUS_COUNTS
+}
+
+/**
+ * Lấy danh sách báo cáo tiến trình phân trang từ GET /api/user/reports/tracking
+ */
+export async function getTrackingReports(
+  params?: TrackingReportsFilterParams
+): Promise<PaginatedTrackingReports> {
+  try {
+    const res = await authorizeApi.get("/api/user/reports/tracking", {
+      params: {
+        search: params?.search || undefined,
+        status:
+          params?.status && params.status !== "ALL" ? params.status : undefined,
+        categoryId: params?.categoryId || undefined,
+        days: params?.days || undefined,
+        page: params?.page ?? 0,
+        size: params?.size ?? 10,
+        sort: params?.sort || "createdAt,desc",
+      },
+    })
+
+    if (res.data?.success && res.data?.data) {
+      const pageData = res.data.data
+      const rawList = Array.isArray(pageData.data) ? pageData.data : []
+      const items: TrackingReportItem[] = rawList.map((item: any) => ({
+        id: item.id || (item.rawId ? `#RPT-${item.rawId}` : "#RPT-0000"),
+        hashId: item.hashId || "---",
+        targetType: item.targetType || "PHONE",
+        targetValue: item.targetValue || "",
+        targetSub: item.targetSub || "",
+        category: item.category || "Chưa phân loại",
+        submittedDate:
+          item.submittedDate ||
+          (item.createdAt
+            ? new Date(item.createdAt).toLocaleString("vi-VN")
+            : "Vừa xong"),
+        slaTime: item.slaTime || "Đang xử lý",
+        slaStatus: item.slaStatus || "processing",
+        evidenceBadge:
+          item.evidenceBadge ||
+          (item.evidenceCount
+            ? `${item.evidenceCount} bằng chứng`
+            : "Không có"),
+        status: item.status || "PENDING",
+      }))
+
+      return {
+        items,
+        currentPage: pageData.currentPage ?? 0,
+        totalItems: pageData.totalItems ?? items.length,
+        totalPages: pageData.totalPages ?? 1,
+        pageSize: pageData.pageSize ?? 10,
+        hasNext: Boolean(pageData.hasNext),
+        hasPrevious: Boolean(pageData.hasPrevious),
+      }
+    }
+  } catch (error) {
+    console.warn("Không thể tải danh sách theo dõi tiến trình:", error)
+  }
+
+  return {
+    items: [],
+    currentPage: 0,
+    totalItems: 0,
+    totalPages: 1,
+    pageSize: 10,
+    hasNext: false,
+    hasPrevious: false,
+  }
+}
+
+/**
+ * Lấy danh mục thủ đoạn lừa đảo từ GET /api/user/reports/categories
+ */
+export async function getReportCategories(): Promise<ScamCategoryItem[]> {
+  try {
+    const res = await authorizeApi.get("/api/user/reports/categories")
+    if (res.data?.success && Array.isArray(res.data?.data)) {
+      return res.data.data
+    }
+  } catch (error) {
+    console.warn("Không thể tải danh mục thủ đoạn:", error)
+  }
+  return []
+}
+
+/**
+ * Xuất file CSV đối soát từ GET /api/user/reports/export-csv
+ */
+export async function exportTrackingReportsCsv(
+  params?: TrackingReportsFilterParams
+): Promise<Blob> {
+  const res = await authorizeApi.get("/api/user/reports/export-csv", {
+    params: {
+      search: params?.search || undefined,
+      status:
+        params?.status && params.status !== "ALL" ? params.status : undefined,
+      categoryId: params?.categoryId || undefined,
+      days: params?.days || undefined,
+    },
+    responseType: "blob",
+  })
+  return res.data
+}
 
 export interface SubmitReportResponse {
   success: boolean
