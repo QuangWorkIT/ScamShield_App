@@ -302,6 +302,22 @@ class AdminUserServiceImplTest {
     }
 
     @Test
+    @DisplayName("updateUserRole propagates exception when audit log save fails")
+    void updateUserRole_AuditLogFailure_PropagatesException() {
+        when(userRepository.findById(722L)).thenReturn(Optional.of(regularUser));
+        when(roleRepository.findByName("MODERATOR")).thenReturn(Optional.of(modRole));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new RuntimeException("Database error during audit save"))
+                .when(auditLogRepository).save(any(AuditLog.class));
+
+        AdminUpdateRoleRequest request = new AdminUpdateRoleRequest("MODERATOR");
+
+        assertThatThrownBy(() -> service.updateUserRole(722L, request, "hvanE.admin@scamshield.gov.vn"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Database error during audit save");
+    }
+
+    @Test
     @DisplayName("getAvailableRoles returns 4 system roles")
     void getAvailableRoles_ReturnsRoles() {
         List<AdminRoleOptionResponse> roles = service.getAvailableRoles();

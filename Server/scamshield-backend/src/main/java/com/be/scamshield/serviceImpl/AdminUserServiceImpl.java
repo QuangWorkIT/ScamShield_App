@@ -354,24 +354,20 @@ public class AdminUserServiceImpl implements IAdminUserService {
     }
 
     private void recordAuditLog(String actorUsername, String action, Long entityId, String previousValue, String newValue, String reason) {
-        try {
-            User actor = null;
-            if (actorUsername != null && !actorUsername.isBlank()) {
-                actor = userRepository.findByEmailOrPhoneNumber(actorUsername).orElse(null);
-            }
-            AuditLog auditLog = AuditLog.builder()
-                    .actorUser(actor)
-                    .action(action)
-                    .entityType("USER")
-                    .entityId(entityId)
-                    .previousValue(previousValue)
-                    .newValue(newValue)
-                    .reason(reason)
-                    .createdAt(LocalDateTime.now())
-                    .build();
-            auditLogRepository.save(auditLog);
-        } catch (Exception ex) {
-            log.warn("Failed to write audit log for action {}: {}", action, ex.getMessage());
+        User actor = null;
+        if (actorUsername != null && !actorUsername.isBlank()) {
+            actor = userRepository.findByEmailOrPhoneNumber(actorUsername).orElse(null);
         }
+        AuditLog auditLog = AuditLog.builder()
+                .actorUser(actor)
+                .action(action)
+                .entityType("USER")
+                .entityId(entityId)
+                .previousValue(previousValue)
+                .newValue(newValue)
+                .reason(reason)
+                .createdAt(LocalDateTime.now())
+                .build();
+        auditLogRepository.save(auditLog);
     }
 }
