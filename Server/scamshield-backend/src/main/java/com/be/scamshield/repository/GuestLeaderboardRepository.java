@@ -41,7 +41,19 @@ public class GuestLeaderboardRepository {
         return count != null ? count : 0L;
     }
 
-    public List<UserContribution> findTopContributors(int limit) {
+    public List<UserContribution> findTopContributors(LocalDateTime since, int limit) {
+        MapSqlParameterSource params = new MapSqlParameterSource("limit", limit);
+        String reportJoin;
+        String orderBy;
+        if (since != null) {
+            reportJoin = "LEFT JOIN reports rep ON rep.reporter_user_id = u.id AND rep.created_at >= :since";
+            orderBy = "COUNT(rep.id) DESC, u.reputation_points DESC, u.id ASC";
+            params.addValue("since", since);
+        } else {
+            reportJoin = "LEFT JOIN reports rep ON rep.reporter_user_id = u.id";
+            orderBy = "u.reputation_points DESC, COUNT(rep.id) DESC, u.id ASC";
+        }
+
         String sql = """
                 SELECT 
                     u.id AS user_id,
@@ -51,13 +63,12 @@ public class GuestLeaderboardRepository {
                     COUNT(rep.id) AS report_count
                 FROM users u
                 LEFT JOIN reputation_ranks r ON r.id = u.reputation_rank_id
-                LEFT JOIN reports rep ON rep.reporter_user_id = u.id
+                """ + " " + reportJoin + """
                 WHERE u.status = 'ACTIVE'
                 GROUP BY u.id, u.full_name, u.reputation_points, r.name
-                ORDER BY u.reputation_points DESC, report_count DESC
+                ORDER BY """ + " " + orderBy + """
                 LIMIT :limit
                 """;
-        MapSqlParameterSource params = new MapSqlParameterSource("limit", limit);
         return jdbc.query(sql, params, (rs, rowNum) -> new UserContribution(
                 rs.getLong("user_id"),
                 rs.getString("full_name"),
@@ -65,5 +76,9 @@ public class GuestLeaderboardRepository {
                 rs.getString("rank_name"),
                 rs.getLong("report_count")
         ));
+    }
+
+    public List<UserContribution> findTopContributors(int limit) {
+        return findTopContributors(null, limit);
     }
 }

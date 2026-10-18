@@ -22,18 +22,19 @@ public class GuestLeaderboardServiceImpl implements IGuestLeaderboardService {
     private final GuestLeaderboardRepository guestLeaderboardRepository;
     private final Clock applicationClock;
 
-    private static final long BASELINE_ACTIVE_EXPERTS = 14820L;
-    private static final long BASELINE_NEUTRALIZED_THREATS = 84910L;
-
     @Override
     @Transactional(readOnly = true)
     public GuestLeaderboardResponse getLeaderboard(String timeRange) {
         LocalDateTime now = LocalDateTime.now(applicationClock);
         String resolvedFilter = resolveFilter(timeRange);
+        LocalDateTime since = resolveSince(resolvedFilter, now);
 
-        List<LeaderboardStatCardResponse> stats = buildStatsCards(now);
-        LeaderboardTopThreeResponse topThree = buildTopThree();
-        List<LeaderboardRankingItemResponse> rankings = buildRankings();
+        List<UserContribution> contributors = guestLeaderboardRepository.findTopContributors(since, 10);
+        NumberFormat formatter = NumberFormat.getNumberInstance(Locale.US);
+
+        List<LeaderboardStatCardResponse> stats = buildStatsCards(now, formatter);
+        LeaderboardTopThreeResponse topThree = buildTopThree(contributors, since, formatter);
+        List<LeaderboardRankingItemResponse> rankings = buildRankings(contributors, since, formatter);
         List<LeaderboardFilterOptionResponse> filters = buildFilterOptions(now, resolvedFilter);
 
         return GuestLeaderboardResponse.builder()
@@ -59,6 +60,16 @@ public class GuestLeaderboardServiceImpl implements IGuestLeaderboardService {
         return "THIS_MONTH";
     }
 
+    private LocalDateTime resolveSince(String resolvedFilter, LocalDateTime now) {
+        if ("ALL_TIME".equalsIgnoreCase(resolvedFilter)) {
+            return null;
+        }
+        if ("LAST_7_DAYS".equalsIgnoreCase(resolvedFilter)) {
+            return now.minusDays(7);
+        }
+        return now.withDayOfMonth(1).toLocalDate().atStartOfDay();
+    }
+
     private List<LeaderboardFilterOptionResponse> buildFilterOptions(LocalDateTime now, String activeFilter) {
         String monthLabel = String.format("Tháng %02d/%d", now.getMonthValue(), now.getYear());
 
@@ -81,7 +92,7 @@ public class GuestLeaderboardServiceImpl implements IGuestLeaderboardService {
         );
     }
 
-    private List<LeaderboardStatCardResponse> buildStatsCards(LocalDateTime now) {
+    private List<LeaderboardStatCardResponse> buildStatsCards(LocalDateTime now, NumberFormat formatter) {
         long activeDbUsers = 0;
         long newUsersWeek = 0;
         long neutralizedDbThreats = 0;
@@ -91,14 +102,12 @@ public class GuestLeaderboardServiceImpl implements IGuestLeaderboardService {
             newUsersWeek = guestLeaderboardRepository.countNewUsersSince(now.minusDays(7));
             neutralizedDbThreats = guestLeaderboardRepository.countNeutralizedThreats();
         } catch (Exception ignored) {
-            // Fallback to baseline metrics safely if DB is empty
+            // Safely handle errors if tables are empty
         }
 
-        long totalExperts = BASELINE_ACTIVE_EXPERTS + activeDbUsers;
-        long totalThreats = BASELINE_NEUTRALIZED_THREATS + neutralizedDbThreats;
-        long weekGain = Math.max(newUsersWeek, 328L);
-
-        NumberFormat formatter = NumberFormat.getNumberInstance(Locale.US);
+        long totalExperts = activeDbUsers;
+        long totalThreats = neutralizedDbThreats;
+        long weekGain = newUsersWeek;
 
         return List.of(
                 LeaderboardStatCardResponse.builder()
@@ -116,71 +125,28 @@ public class GuestLeaderboardServiceImpl implements IGuestLeaderboardService {
                         .rawValue(totalThreats)
                         .sub("Báo cáo A05 & NCSC")
                         .icon("ShieldCheck")
-                        .build(),
-                LeaderboardStatCardResponse.builder()
-                        .key("VERIFICATION_ACCURACY")
-                        .label("ĐỘ CHÍNH XÁC XÁC MINH")
-                        .value("99.4%")
-                        .rawValue(99L)
-                        .sub("Đồng thuận đa lớp (Consensus)")
-                        .icon("Target")
-                        .build(),
-                LeaderboardStatCardResponse.builder()
-                        .key("AVG_RESPONSE_TIME")
-                        .label("THỜI GIAN PHẢN ỨNG TB")
-                        .value("4.2 phút")
-                        .rawValue(4L)
-                        .sub("Tự động chặn DNS sau 90 giây")
-                        .icon("Timer")
                         .build()
         );
     }
 
-    private LeaderboardTopThreeResponse buildTopThree() {
-        LeaderboardPodiumItemResponse rank1 = LeaderboardPodiumItemResponse.builder()
-                .rank(1)
-                .anonymousIdentifier("Hunter_#1029")
-                .badge("HẠNG NHẤT TOÀN QUỐC")
-                .subtitle("Định danh xác thực cấp cao")
-                .footerLeft("An toàn tuyệt đối (Zero PII)")
-                .footerRight("#VN-01")
-                .avatar("H1")
-                .rankClass("HỘ VỆ BẠCH KIM")
-                .rankTier("HỘ VỆ BẠCH KIM")
-                .contributions(1540L)
-                .contributionsFormatted("1,540")
-                .accuracy("99.7%")
-                .build();
+    private LeaderboardTopThreeResponse buildTopThree(
+            List<UserContribution> contributors,
+            LocalDateTime since,
+            NumberFormat formatter
+    ) {
+        LeaderboardPodiumItemResponse rank1 = null;
+        LeaderboardPodiumItemResponse rank2 = null;
+        LeaderboardPodiumItemResponse rank3 = null;
 
-        LeaderboardPodiumItemResponse rank2 = LeaderboardPodiumItemResponse.builder()
-                .rank(2)
-                .anonymousIdentifier("Sentinel_#8842")
-                .badge(null)
-                .subtitle("Khu vực: VN-North (Ẩn danh)")
-                .footerLeft("Mã hóa PII")
-                .footerRight("Top 0.05%")
-                .avatar("S8")
-                .rankClass("HỘ VỆ BẠCH KIM")
-                .rankTier("HỘ VỆ BẠCH KIM")
-                .contributions(1320L)
-                .contributionsFormatted("1,320")
-                .accuracy("99.5%")
-                .build();
-
-        LeaderboardPodiumItemResponse rank3 = LeaderboardPodiumItemResponse.builder()
-                .rank(3)
-                .anonymousIdentifier("Member_#4912")
-                .badge(null)
-                .subtitle("Khu vực: VN-South (Ẩn danh)")
-                .footerLeft("Mã hóa PII")
-                .footerRight("Top 0.1%")
-                .avatar("M4")
-                .rankClass("HỘ VỆ BẠCH KIM")
-                .rankTier("HỘ VỆ BẠCH KIM")
-                .contributions(1250L)
-                .contributionsFormatted("1,250")
-                .accuracy("99.4%")
-                .build();
+        if (contributors != null && contributors.size() >= 1) {
+            rank1 = buildPodiumItem(contributors.get(0), 1, since, formatter);
+        }
+        if (contributors != null && contributors.size() >= 2) {
+            rank2 = buildPodiumItem(contributors.get(1), 2, since, formatter);
+        }
+        if (contributors != null && contributors.size() >= 3) {
+            rank3 = buildPodiumItem(contributors.get(2), 3, since, formatter);
+        }
 
         return LeaderboardTopThreeResponse.builder()
                 .rank1(rank1)
@@ -189,92 +155,121 @@ public class GuestLeaderboardServiceImpl implements IGuestLeaderboardService {
                 .build();
     }
 
-    private List<LeaderboardRankingItemResponse> buildRankings() {
-        return List.of(
-                LeaderboardRankingItemResponse.builder()
-                        .rank("04")
-                        .rankNumber(4)
-                        .avatar("S4")
-                        .name("Sentinel_#402")
-                        .rankClass("HỘ VỆ BẠCH KIM")
-                        .rankTier("HỘ VỆ BẠCH KIM")
-                        .score("1,215")
-                        .rawScore(1215L)
-                        .acc("99.3%")
-                        .accuracy("99.3%")
-                        .build(),
-                LeaderboardRankingItemResponse.builder()
-                        .rank("05")
-                        .rankNumber(5)
-                        .avatar("M8")
-                        .name("Member_#819")
-                        .rankClass("HỘ VỆ BẠCH KIM")
-                        .rankTier("HỘ VỆ BẠCH KIM")
-                        .score("1,098")
-                        .rawScore(1098L)
-                        .acc("99.0%")
-                        .accuracy("99.0%")
-                        .build(),
-                LeaderboardRankingItemResponse.builder()
-                        .rank("06")
-                        .rankNumber(6)
-                        .avatar("U2")
-                        .name("User_****29")
-                        .rankClass("XÁC THỰC VÀNG")
-                        .rankTier("XÁC THỰC VÀNG")
-                        .score("984")
-                        .rawScore(984L)
-                        .acc("98.8%")
-                        .accuracy("98.8%")
-                        .build(),
-                LeaderboardRankingItemResponse.builder()
-                        .rank("07")
-                        .rankNumber(7)
-                        .avatar("H1")
-                        .name("Hunter_#104")
-                        .rankClass("XÁC THỰC VÀNG")
-                        .rankTier("XÁC THỰC VÀNG")
-                        .score("870")
-                        .rawScore(870L)
-                        .acc("98.5%")
-                        .accuracy("98.5%")
-                        .build(),
-                LeaderboardRankingItemResponse.builder()
-                        .rank("08")
-                        .rankNumber(8)
-                        .avatar("S7")
-                        .name("Sentinel_#752")
-                        .rankClass("XÁC THỰC VÀNG")
-                        .rankTier("XÁC THỰC VÀNG")
-                        .score("752")
-                        .rawScore(752L)
-                        .acc("98.2%")
-                        .accuracy("98.2%")
-                        .build(),
-                LeaderboardRankingItemResponse.builder()
-                        .rank("09")
-                        .rankNumber(9)
-                        .avatar("M6")
-                        .name("Member_#689")
-                        .rankClass("XÁC THỰC VÀNG")
-                        .rankTier("XÁC THỰC VÀNG")
-                        .score("689")
-                        .rawScore(689L)
-                        .acc("98.9%")
-                        .accuracy("98.9%")
-                        .build(),
-                LeaderboardRankingItemResponse.builder()
-                        .rank("10")
-                        .rankNumber(10)
-                        .avatar("U6")
-                        .name("User_****64")
-                        .rankClass("XÁC THỰC VÀNG")
-                        .rankTier("XÁC THỰC VÀNG")
-                        .score("640")
-                        .rawScore(640L)
-                        .acc("98.0%")
-                        .accuracy("98.0%")
-                        .build()
-        );
+    private LeaderboardPodiumItemResponse buildPodiumItem(
+            UserContribution contrib,
+            int rank,
+            LocalDateTime since,
+            NumberFormat formatter
+    ) {
+        long score = calculateScore(contrib, since);
+        String anonName = anonymizeUser(contrib.userId(), rank);
+        String avatar = resolveAvatar(anonName);
+        String tier = resolveRankTier(contrib.rankName(), rank);
+
+        String badge = rank == 1 ? "HẠNG NHẤT TOÀN QUỐC" : null;
+        String subtitle = rank == 1 ? "Định danh xác thực cấp cao"
+                : (rank == 2 ? "Khu vực: VN-North (Ẩn danh)" : "Khu vực: VN-South (Ẩn danh)");
+        String footerLeft = rank == 1 ? "An toàn tuyệt đối (Zero PII)" : "Mã hóa PII";
+        String footerRight = rank == 1 ? "#VN-01" : (rank == 2 ? "Top 0.05%" : "Top 0.1%");
+
+        return LeaderboardPodiumItemResponse.builder()
+                .rank(rank)
+                .anonymousIdentifier(anonName)
+                .badge(badge)
+                .subtitle(subtitle)
+                .footerLeft(footerLeft)
+                .footerRight(footerRight)
+                .avatar(avatar)
+                .rankClass(tier)
+                .rankTier(tier)
+                .contributions(score)
+                .contributionsFormatted(formatter.format(score))
+                .accuracy(null)
+                .build();
+    }
+
+    private List<LeaderboardRankingItemResponse> buildRankings(
+            List<UserContribution> contributors,
+            LocalDateTime since,
+            NumberFormat formatter
+    ) {
+        if (contributors == null || contributors.size() <= 3) {
+            return List.of();
+        }
+
+        List<LeaderboardRankingItemResponse> rankings = new ArrayList<>();
+        int max = Math.min(contributors.size(), 10);
+        for (int i = 3; i < max; i++) {
+            UserContribution contrib = contributors.get(i);
+            int rankNum = i + 1;
+            long score = calculateScore(contrib, since);
+            String anonName = anonymizeUser(contrib.userId(), rankNum);
+            String avatar = resolveAvatar(anonName);
+            String tier = resolveRankTier(contrib.rankName(), rankNum);
+
+            rankings.add(LeaderboardRankingItemResponse.builder()
+                    .rank(String.format("%02d", rankNum))
+                    .rankNumber(rankNum)
+                    .avatar(avatar)
+                    .name(anonName)
+                    .rankClass(tier)
+                    .rankTier(tier)
+                    .score(formatter.format(score))
+                    .rawScore(score)
+                    .acc(null)
+                    .accuracy(null)
+                    .build());
+        }
+        return rankings;
+    }
+
+    private long calculateScore(UserContribution contrib, LocalDateTime since) {
+        if (since != null) {
+            return contrib.reportCount();
+        }
+        return contrib.reputationPoints() > 0 ? (long) contrib.reputationPoints() : contrib.reportCount();
+    }
+
+    private String anonymizeUser(Long userId, int rank) {
+        if (userId == null) {
+            return "User_#0000";
+        }
+        String prefix;
+        if (rank == 1) {
+            prefix = "Hunter_#";
+        } else if (rank == 2) {
+            prefix = "Sentinel_#";
+        } else if (rank == 3) {
+            prefix = "Member_#";
+        } else if (rank % 3 == 0) {
+            prefix = "Member_#";
+        } else if (rank % 2 == 0) {
+            prefix = "Sentinel_#";
+        } else {
+            prefix = "User_****";
+        }
+
+        if (prefix.endsWith("****")) {
+            return prefix + String.format("%02d", Math.abs(userId % 100));
+        } else {
+            long displayNum = userId < 1000 ? userId + 1000 : userId;
+            return prefix + displayNum;
+        }
+    }
+
+    private String resolveAvatar(String anonymousName) {
+        if (anonymousName == null || anonymousName.isEmpty()) {
+            return "U0";
+        }
+        char firstChar = anonymousName.charAt(0);
+        char lastChar = anonymousName.charAt(anonymousName.length() - 1);
+        return "" + firstChar + (Character.isDigit(lastChar) ? lastChar : "1");
+    }
+
+    private String resolveRankTier(String dbRankName, int rank) {
+        if (dbRankName != null && !dbRankName.isBlank()) {
+            return dbRankName;
+        }
+        return rank <= 5 ? "HỘ VỆ BẠCH KIM" : "XÁC THỰC VÀNG";
     }
 }
