@@ -100,6 +100,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/api/v1/scam-check/ping"
                         ).permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
                         .anyRequest().authenticated()
                 );
 
