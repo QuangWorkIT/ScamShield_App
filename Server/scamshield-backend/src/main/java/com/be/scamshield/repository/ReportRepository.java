@@ -16,4 +16,8 @@ public interface ReportRepository extends JpaRepository<Report, Long>, JpaSpecif
     long countByReporterUserIdAndCreatedAtAfter(Long reporterUserId, LocalDateTime createdAt);
     long countByReporterUserIdAndStatus(Long reporterUserId, String status);
     Optional<Report> findByIdAndReporterUserId(Long id, Long reporterUserId);
+
+    long countByModerationLockedTrue();
+    long countByStatusIgnoreCaseAndModerationLockedFalse(String status);
+    long countByStatusIgnoreCase(String status);
 }

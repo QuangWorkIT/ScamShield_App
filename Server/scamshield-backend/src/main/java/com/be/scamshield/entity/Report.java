@@ -1,7 +1,11 @@
 package com.be.scamshield.entity;
 
+import com.be.scamshield.constant.ReportPriority;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "reports")
@@ -48,8 +52,18 @@ public class Report {
     @JoinColumn(name = "merged_into_report_id")
     private Report mergedIntoReport;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority")
+    private ReportPriority priority;
+
     @Column(name = "priority_score")
-    private java.math.BigDecimal priorityScore;
+    private BigDecimal priorityScore;
+
+    @Column(name = "evidence_completeness")
+    private Integer evidenceCompleteness;
+
+    @Column(name = "reporter_proposal")
+    private String reporterProposal;
 
     @Column(name = "report_count_signal", nullable = false)
     private Integer reportCountSignal;
@@ -66,10 +80,30 @@ public class Report {
     @Column(name = "moderation_locked", nullable = false)
     private Boolean moderationLocked;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "locked_by_user_id")
+    private User lockedByUser;
+
+    @Column(name = "locked_at")
+    private LocalDateTime lockedAt;
+
     @Column(name = "created_at", nullable = false)
-    private java.time.LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private java.time.LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
 
+    public ReportPriority resolvePriority() {
+        if (this.priority != null) {
+            return this.priority;
+        }
+        if (this.priorityScore != null) {
+            if (this.priorityScore.compareTo(new BigDecimal("80")) >= 0) {
+                return ReportPriority.URGENT;
+            } else if (this.priorityScore.compareTo(new BigDecimal("50")) >= 0) {
+                return ReportPriority.HIGH;
+            }
+        }
+        return ReportPriority.NORMAL;
+    }
 }
