@@ -20,6 +20,10 @@ public interface ReportRepository extends JpaRepository<Report, Long>, JpaSpecif
     @EntityGraph(attributePaths = {"indicator", "category", "reporterUser"})
     Page<Report> findAll(Specification<Report> spec, Pageable pageable);
 
+    @Override
+    @EntityGraph(attributePaths = {"indicator", "category", "reporterUser"})
+    Optional<Report> findById(Long id);
+
     List<Report> findByReporterUserIdOrderByCreatedAtDesc(Long reporterUserId);
     long countByReporterUserId(Long reporterUserId);
     long countByReporterUserIdAndCreatedAtAfter(Long reporterUserId, LocalDateTime createdAt);
