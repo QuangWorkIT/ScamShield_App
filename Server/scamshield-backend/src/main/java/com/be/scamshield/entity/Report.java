@@ -93,14 +93,17 @@ public class Report {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public static final BigDecimal PRIORITY_THRESHOLD_URGENT = new BigDecimal("80");
+    public static final BigDecimal PRIORITY_THRESHOLD_HIGH = new BigDecimal("50");
+
     public ReportPriority resolvePriority() {
         if (this.priority != null) {
             return this.priority;
         }
         if (this.priorityScore != null) {
-            if (this.priorityScore.compareTo(new BigDecimal("80")) >= 0) {
+            if (this.priorityScore.compareTo(PRIORITY_THRESHOLD_URGENT) >= 0) {
                 return ReportPriority.URGENT;
-            } else if (this.priorityScore.compareTo(new BigDecimal("50")) >= 0) {
+            } else if (this.priorityScore.compareTo(PRIORITY_THRESHOLD_HIGH) >= 0) {
                 return ReportPriority.HIGH;
             }
         }

@@ -2,6 +2,7 @@ package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.constant.ReportPriority;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
 import com.be.scamshield.dto.response.ModeratorEvidenceResponse;
 import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
 import com.be.scamshield.dto.response.ModeratorReportResponse;
@@ -14,9 +15,13 @@ import com.be.scamshield.exception.ResourceNotFoundException;
 import com.be.scamshield.repository.ReportEvidenceRepository;
 import com.be.scamshield.repository.ReportRepository;
 import com.be.scamshield.service.IModeratorReportService;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -46,12 +51,11 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
     @Override
     @Transactional(readOnly = true)
     public PaginatedResponse<ModeratorReportResponse> getReportQueue(
-            String tab,
-            String search,
-            ReportPriority priority,
+            ModeratorReportFilterRequest filter,
             Pageable pageable) {
 
-        Specification<Report> spec = createFilterSpecification(tab, search, priority);
+        ModeratorReportFilterRequest safeFilter = filter != null ? filter : new ModeratorReportFilterRequest();
+        Specification<Report> spec = createFilterSpecification(safeFilter);
         Page<Report> pageResult = reportRepository.findAll(spec, pageable);
 
         if (pageResult.isEmpty()) {
@@ -96,7 +100,7 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
     @Override
     @Transactional(readOnly = true)
     public ModeratorQueueCountsResponse getQueueCounts() {
-        long locked = reportRepository.countByModerationLockedTrue();
+        long locked = reportRepository.countByModerationLockedTrueOrStatusIgnoreCase("LOCKED");
         long pending = reportRepository.countByStatusIgnoreCaseAndModerationLockedFalse("PENDING");
         long inReview = reportRepository.countByStatusIgnoreCaseAndModerationLockedFalse("IN_REVIEW");
         long all = reportRepository.count();
@@ -119,7 +123,10 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
         return mapToModeratorReportResponse(report, evidences);
     }
 
-    private Specification<Report> createFilterSpecification(String tab, String search, ReportPriority priority) {
+    private Specification<Report> createFilterSpecification(ModeratorReportFilterRequest filter) {
+        String tab = filter.getTab();
+        String search = filter.getSearch();
+        ReportPriority priority = filter.getPriority();
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -155,7 +162,7 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
 
             // 2. Priority filtering
             if (priority != null) {
-                predicates.add(cb.equal(root.get("priority"), priority));
+                predicates.add(buildPriorityPredicate(root, cb, priority));
             }
 
             // 3. Search query filtering
@@ -188,6 +195,34 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    private Predicate buildPriorityPredicate(Root<Report> root, CriteriaBuilder cb, ReportPriority priority) {
+        Predicate directMatch = cb.equal(root.get("priority"), priority);
+        Predicate nullPriority = cb.isNull(root.get("priority"));
+        Expression<BigDecimal> score = root.get("priorityScore");
+
+        Predicate fallbackMatch = switch (priority) {
+            case URGENT -> cb.and(
+                    nullPriority,
+                    cb.greaterThanOrEqualTo(score, Report.PRIORITY_THRESHOLD_URGENT)
+            );
+            case HIGH -> cb.and(
+                    nullPriority,
+                    cb.isNotNull(score),
+                    cb.greaterThanOrEqualTo(score, Report.PRIORITY_THRESHOLD_HIGH),
+                    cb.lessThan(score, Report.PRIORITY_THRESHOLD_URGENT)
+            );
+            case NORMAL -> cb.and(
+                    nullPriority,
+                    cb.or(
+                            cb.isNull(score),
+                            cb.lessThan(score, Report.PRIORITY_THRESHOLD_HIGH)
+                    )
+            );
+        };
+
+        return cb.or(directMatch, fallbackMatch);
     }
 
     private Long parseSearchId(String search) {

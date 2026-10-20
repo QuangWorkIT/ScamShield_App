@@ -2,6 +2,7 @@ package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.constant.ReportPriority;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
 import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
 import com.be.scamshield.dto.response.ModeratorReportResponse;
 import com.be.scamshield.entity.*;
@@ -105,7 +106,8 @@ class ModeratorReportServiceImplTest {
         when(reportEvidenceRepository.findByReportIdIn(List.of(1891L)))
                 .thenReturn(List.of(testEvidence));
 
-        PaginatedResponse<ModeratorReportResponse> response = service.getReportQueue("ALL", null, null, pageable);
+        ModeratorReportFilterRequest filter = ModeratorReportFilterRequest.builder().tab("ALL").build();
+        PaginatedResponse<ModeratorReportResponse> response = service.getReportQueue(filter, pageable);
 
         assertThat(response.getData()).hasSize(1);
         ModeratorReportResponse item = response.getData().get(0);
@@ -144,7 +146,8 @@ class ModeratorReportServiceImplTest {
         when(reportRepository.findAll(any(Specification.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(Collections.emptyList(), pageable, 0));
 
-        PaginatedResponse<ModeratorReportResponse> response = service.getReportQueue("ALL", null, null, pageable);
+        ModeratorReportFilterRequest filter = ModeratorReportFilterRequest.builder().tab("ALL").build();
+        PaginatedResponse<ModeratorReportResponse> response = service.getReportQueue(filter, pageable);
 
         assertThat(response.getData()).isEmpty();
         assertThat(response.getTotalItems()).isEqualTo(0);
@@ -155,7 +158,7 @@ class ModeratorReportServiceImplTest {
         when(reportRepository.count()).thenReturn(7L);
         when(reportRepository.countByStatusIgnoreCaseAndModerationLockedFalse("PENDING")).thenReturn(3L);
         when(reportRepository.countByStatusIgnoreCaseAndModerationLockedFalse("IN_REVIEW")).thenReturn(1L);
-        when(reportRepository.countByModerationLockedTrue()).thenReturn(2L);
+        when(reportRepository.countByModerationLockedTrueOrStatusIgnoreCase("LOCKED")).thenReturn(2L);
 
         ModeratorQueueCountsResponse counts = service.getQueueCounts();
 
@@ -189,16 +192,40 @@ class ModeratorReportServiceImplTest {
     @Test
     void resolvePriority_WhenPriorityIsNull_FallsBackToPriorityScore() {
         testReport.setPriority(null);
+        testReport.setPriorityScore(Report.PRIORITY_THRESHOLD_URGENT);
+        assertThat(testReport.resolvePriority()).isEqualTo(ReportPriority.URGENT);
+
         testReport.setPriorityScore(new BigDecimal("85.0"));
         assertThat(testReport.resolvePriority()).isEqualTo(ReportPriority.URGENT);
+
+        testReport.setPriorityScore(Report.PRIORITY_THRESHOLD_HIGH);
+        assertThat(testReport.resolvePriority()).isEqualTo(ReportPriority.HIGH);
 
         testReport.setPriorityScore(new BigDecimal("60.0"));
         assertThat(testReport.resolvePriority()).isEqualTo(ReportPriority.HIGH);
 
-        testReport.setPriorityScore(new BigDecimal("30.0"));
+        testReport.setPriorityScore(Report.PRIORITY_THRESHOLD_HIGH.subtract(new BigDecimal("0.1")));
         assertThat(testReport.resolvePriority()).isEqualTo(ReportPriority.NORMAL);
 
         testReport.setPriorityScore(null);
         assertThat(testReport.resolvePriority()).isEqualTo(ReportPriority.NORMAL);
+    }
+
+    @Test
+    void getReportQueue_WithPriorityFilter_BuildsValidSpecification() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(reportRepository.findAll(any(Specification.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(testReport), pageable, 1));
+        when(reportEvidenceRepository.findByReportIdIn(List.of(1891L)))
+                .thenReturn(List.of(testEvidence));
+
+        for (ReportPriority p : ReportPriority.values()) {
+            ModeratorReportFilterRequest filter = ModeratorReportFilterRequest.builder()
+                    .tab("ALL")
+                    .priority(p)
+                    .build();
+            PaginatedResponse<ModeratorReportResponse> response = service.getReportQueue(filter, pageable);
+            assertThat(response.getData()).hasSize(1);
+        }
     }
 }

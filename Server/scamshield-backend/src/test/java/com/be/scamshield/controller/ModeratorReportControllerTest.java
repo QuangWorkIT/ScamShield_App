@@ -3,6 +3,7 @@ package com.be.scamshield.controller;
 import com.be.scamshield.config.SecurityConfig;
 import com.be.scamshield.constant.ReportPriority;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
 import com.be.scamshield.dto.response.ModeratorEvidenceResponse;
 import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
 import com.be.scamshield.dto.response.ModeratorReportResponse;
@@ -116,7 +117,7 @@ class ModeratorReportControllerTest {
         page.setPageSize(20);
         page.setTotalPages(1);
 
-        when(moderatorReportService.getReportQueue(eq("ALL"), any(), any(), any(Pageable.class)))
+        when(moderatorReportService.getReportQueue(any(ModeratorReportFilterRequest.class), any(Pageable.class)))
                 .thenReturn(page);
 
         mvc.perform(get(BASE_URL)
@@ -129,6 +130,49 @@ class ModeratorReportControllerTest {
                 .andExpect(jsonPath("$.data.data[0].status").value("Pending"))
                 .andExpect(jsonPath("$.data.data[0].aiScore").isEmpty())
                 .andExpect(jsonPath("$.data.data[0].taxonomies[0]").value("Lừa đảo ngân hàng / OTP Phishing"));
+    }
+
+    @Test
+    void getReportQueue_WhenSortByPriorityScore_ReturnsSuccess() throws Exception {
+        PaginatedResponse<ModeratorReportResponse> page = new PaginatedResponse<>();
+        page.setData(List.of(mockReportResponse));
+        page.setCurrentPage(0);
+        page.setTotalItems(1);
+        page.setPageSize(20);
+        page.setTotalPages(1);
+
+        when(moderatorReportService.getReportQueue(any(ModeratorReportFilterRequest.class), any(Pageable.class)))
+                .thenReturn(page);
+
+        mvc.perform(get(BASE_URL)
+                        .param("sort", "priorityScore,desc")
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true));
+    }
+
+    @Test
+    void getReportQueue_WhenSortByUnsupportedPriorityField_ReturnsBadRequest() throws Exception {
+        mvc.perform(get(BASE_URL)
+                        .param("sort", "priority,desc")
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getReportQueue_WhenPageLessThanZero_ReturnsBadRequest() throws Exception {
+        mvc.perform(get(BASE_URL)
+                        .param("page", "-1")
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getReportQueue_WhenSizeLessThanOne_ReturnsBadRequest() throws Exception {
+        mvc.perform(get(BASE_URL)
+                        .param("size", "0")
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

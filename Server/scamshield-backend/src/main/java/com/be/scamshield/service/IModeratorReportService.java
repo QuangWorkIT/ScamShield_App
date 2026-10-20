@@ -1,7 +1,7 @@
 package com.be.scamshield.service;
 
-import com.be.scamshield.constant.ReportPriority;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
 import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
 import com.be.scamshield.dto.response.ModeratorReportResponse;
 import org.springframework.data.domain.Pageable;
@@ -9,9 +9,7 @@ import org.springframework.data.domain.Pageable;
 public interface IModeratorReportService {
 
     PaginatedResponse<ModeratorReportResponse> getReportQueue(
-            String tab,
-            String search,
-            ReportPriority priority,
+            ModeratorReportFilterRequest filter,
             Pageable pageable
     );
 
@@ -19,3 +17,4 @@ public interface IModeratorReportService {
 
     ModeratorReportResponse getReportById(Long id);
 }
+
