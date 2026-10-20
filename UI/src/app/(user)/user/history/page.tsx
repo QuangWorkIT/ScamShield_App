@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "react-toastify"
 import { HistoryFilterBar } from "@/components/features/history/history-filter-bar"
 import { HistoryRiskPills } from "@/components/features/history/history-risk-pills"
@@ -31,6 +31,7 @@ export default function UserHistoryPage() {
   const [totalItems, setTotalItems] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   // Track initial load to prevent empty flicker
   const hasLoadedRef = useRef(false)
@@ -43,49 +44,63 @@ export default function UserHistoryPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // Fetch history data from backend API
-  const fetchHistory = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const response = await getScamCheckHistory({
-        search: debouncedSearch,
-        timeRange,
-        scamType,
-        riskStatus,
-        page: currentPage - 1,
-        size: 10,
-      })
-
-      const paginatedItems = response.items?.data || []
-      setItems(paginatedItems)
-      setTotalPages(response.items?.totalPages || 1)
-      setTotalItems(response.items?.totalItems || 0)
-      setRiskCounts(response.riskCounts)
-      if (response.periodLabel) {
-        setPeriodLabel(response.periodLabel)
-      }
-      hasLoadedRef.current = true
-    } catch (error) {
-      console.error("Error fetching check history:", error)
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Không thể tải lịch sử kiểm tra"
-      )
-      if (!hasLoadedRef.current) {
-        setItems([])
-        setTotalPages(1)
-        setTotalItems(0)
-        setRiskCounts(null)
-      }
-    } finally {
-      setIsLoading(false)
-    }
+  // Clear selections whenever filters or pagination change
+  useEffect(() => {
+    setSelectedIds([])
   }, [debouncedSearch, timeRange, scamType, riskStatus, currentPage])
 
+  // Fetch history data with race condition handling
   useEffect(() => {
-    fetchHistory()
-  }, [fetchHistory])
+    let ignore = false
+    setIsLoading(true)
+
+    getScamCheckHistory({
+      search: debouncedSearch,
+      timeRange,
+      scamType,
+      riskStatus,
+      page: currentPage - 1,
+      size: 10,
+    })
+      .then((response) => {
+        if (!ignore) {
+          const paginatedItems = response.items?.data || []
+          setItems(paginatedItems)
+          setTotalPages(response.items?.totalPages || 1)
+          setTotalItems(response.items?.totalItems || 0)
+          setRiskCounts(response.riskCounts)
+          if (response.periodLabel) {
+            setPeriodLabel(response.periodLabel)
+          }
+          hasLoadedRef.current = true
+        }
+      })
+      .catch((error) => {
+        if (!ignore) {
+          console.error("Error fetching check history:", error)
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Không thể tải lịch sử kiểm tra"
+          )
+          if (!hasLoadedRef.current) {
+            setItems([])
+            setTotalPages(1)
+            setTotalItems(0)
+            setRiskCounts(null)
+          }
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [debouncedSearch, timeRange, scamType, riskStatus, currentPage, refreshKey])
 
   // Reset to page 1 on filter changes
   const handleSearchChange = (value: string) => {
@@ -115,28 +130,41 @@ export default function UserHistoryPage() {
   }
 
   const handleToggleSelectAll = () => {
-    if (selectedIds.length === items.length) {
+    const currentPageIds = items.map((item) => item.id)
+    const isAllPageSelected =
+      currentPageIds.length > 0 &&
+      currentPageIds.every((id) => selectedIds.includes(id))
+
+    if (isAllPageSelected) {
       setSelectedIds([])
     } else {
-      setSelectedIds(items.map((item) => item.id))
+      setSelectedIds(currentPageIds)
     }
   }
 
+  // Count items selected strictly on the current page
+  const selectedOnCurrentPageCount = items.filter((item) =>
+    selectedIds.includes(item.id)
+  ).length
+
   const handleDeleteSelected = async () => {
-    if (selectedIds.length === 0) return
+    const targetIds = selectedIds.filter((id) =>
+      items.some((item) => item.id === id)
+    )
+    if (targetIds.length === 0) return
 
     const confirmDelete = window.confirm(
-      `Bạn có chắc chắn muốn xóa ${selectedIds.length} bản ghi lịch sử kiểm tra đã chọn?`
+      `Bạn có chắc chắn muốn xóa ${targetIds.length} bản ghi lịch sử kiểm tra đã chọn?`
     )
     if (!confirmDelete) return
 
     setIsDeleting(true)
     try {
-      await deleteHistoryItems(selectedIds)
-      toast.success(`Đã xóa ${selectedIds.length} mục lịch sử thành công`)
+      await deleteHistoryItems(targetIds)
+      toast.success(`Đã xóa ${targetIds.length} mục lịch sử thành công`)
       setSelectedIds([])
-      // Refetch page
-      await fetchHistory()
+      // Refetch page via refreshKey
+      setRefreshKey((prev) => prev + 1)
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Xóa lịch sử thất bại"
       toast.error(msg)
@@ -155,7 +183,7 @@ export default function UserHistoryPage() {
         onTimeRangeChange={handleTimeRangeChange}
         scamType={scamType}
         onScamTypeChange={handleScamTypeChange}
-        selectedCount={selectedIds.length}
+        selectedCount={selectedOnCurrentPageCount}
         onDeleteSelected={handleDeleteSelected}
         isDeleting={isDeleting}
       />

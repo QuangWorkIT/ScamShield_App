@@ -34,7 +34,11 @@ export function HistoryDataTable({
   onToggleSelectAll,
   isLoading = false,
 }: HistoryDataTableProps) {
-  const isAllSelected = items.length > 0 && selectedIds.length === items.length
+  const selectedOnThisPageCount = items.filter((item) =>
+    selectedIds.includes(item.id)
+  ).length
+  const isAllSelected =
+    items.length > 0 && selectedOnThisPageCount === items.length
 
   const renderTargetIcon = (item: HistoryItem) => {
     const iconProps = { size: 18, weight: "fill" as const }
@@ -162,7 +166,7 @@ export function HistoryDataTable({
             className="size-4 rounded-md border-[#C6C6CE] text-[#0B132B] focus:ring-0 dark:border-border disabled:opacity-50"
           />
           <span>
-            Chọn tất cả trang này ({selectedIds.length}/{items.length} dòng được
+            Chọn tất cả trang này ({selectedOnThisPageCount}/{items.length} dòng được
             chọn)
           </span>
         </label>

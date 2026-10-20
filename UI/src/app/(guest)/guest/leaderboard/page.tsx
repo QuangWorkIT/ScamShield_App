@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   UserFocus,
@@ -26,46 +26,36 @@ import {
   LeaderboardFilterOption,
 } from "@/features/leaderboard/types/leaderboard.types"
 
-// Default fallback data matching original UI design
-const DEFAULT_STATS: LeaderboardStatCard[] = [
+// Neutral initial placeholder cards while live data is loading
+const INITIAL_STATS: LeaderboardStatCard[] = [
   {
     key: "active_experts",
     label: "CHUYÊN GIA KÍCH HOẠT",
-    value: "14,820",
-    sub: "+124 chuyên gia tuần này",
+    value: "--",
+    sub: "Đang cập nhật...",
     icon: "user_focus",
   },
   {
     key: "neutralized_threats",
     label: "MỐI ĐE DỌA VÔ HIỆU HÓA",
-    value: "84,910",
-    sub: "Báo cáo A3S & NCSC",
+    value: "--",
+    sub: "Đang cập nhật...",
     icon: "shield_check",
   },
   {
     key: "accuracy",
     label: "ĐỘ CHÍNH XÁC XÁC MINH",
-    value: "99.4%",
-    sub: "Đồng thuận đa lớp (Consensus)",
+    value: "--",
+    sub: "Đang cập nhật...",
     icon: "target",
   },
   {
     key: "avg_response_time",
     label: "THỜI GIAN PHẢN ỨNG TB",
-    value: "4.2 phút",
-    sub: "Tự động chặn DNS sau 30 giây",
+    value: "--",
+    sub: "Đang cập nhật...",
     icon: "timer",
   },
-]
-
-const DEFAULT_RANKING_DATA: LeaderboardRankingItem[] = [
-  { rank: "04", rankNumber: 4, avatar: "S4", name: "Sentinel_#402", rankClass: "HỘ VỆ BẠCH KIM", score: "1,215", acc: "99.3%" },
-  { rank: "05", rankNumber: 5, avatar: "M8", name: "Member_#819", rankClass: "HỘ VỆ BẠCH KIM", score: "1,098", acc: "99.0%" },
-  { rank: "06", rankNumber: 6, avatar: "U2", name: "User_****29", rankClass: "XÁC THỰC VÀNG", score: "984", acc: "98.8%" },
-  { rank: "07", rankNumber: 7, avatar: "H1", name: "Hunter_#104", rankClass: "XÁC THỰC VÀNG", score: "870", acc: "98.5%" },
-  { rank: "08", rankNumber: 8, avatar: "S7", name: "Sentinel_#752", rankClass: "XÁC THỰC VÀNG", score: "752", acc: "98.2%" },
-  { rank: "09", rankNumber: 9, avatar: "M6", name: "Member_#689", rankClass: "XÁC THỰC VÀNG", score: "689", acc: "98.9%" },
-  { rank: "10", rankNumber: 10, avatar: "U6", name: "User_****64", rankClass: "XÁC THỰC VÀNG", score: "640", acc: "98.0%" },
 ]
 
 export default function GuestLeaderboardPage() {
@@ -74,42 +64,54 @@ export default function GuestLeaderboardPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchData = useCallback(async (timeRange: string) => {
+  // Fetch leaderboard data with race condition handling
+  useEffect(() => {
+    let ignore = false
     setIsLoading(true)
     setError(null)
-    try {
-      const res = await getLeaderboard(timeRange)
-      setData(res)
-      if (res.activeFilter) {
-        setActiveFilterId(res.activeFilter)
-      }
-    } catch (err) {
-      console.error("Failed to load guest leaderboard:", err)
-      setError("Không thể tải dữ liệu vinh danh thực tế. Đang hiển thị bản xem trước.")
-    } finally {
-      setIsLoading(false)
+
+    getLeaderboard(activeFilterId)
+      .then((res) => {
+        if (!ignore) {
+          setData(res)
+          if (res.activeFilter) {
+            setActiveFilterId(res.activeFilter)
+          }
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          console.error("Failed to load guest leaderboard:", err)
+          setError("Không thể tải dữ liệu vinh danh từ máy chủ. Vui lòng thử lại sau.")
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      ignore = true
     }
-  }, [])
+  }, [activeFilterId])
 
-  useEffect(() => {
-    fetchData(activeFilterId)
-  }, [fetchData, activeFilterId])
-
-  const stats = data?.stats && data.stats.length > 0 ? data.stats : DEFAULT_STATS
+  const stats = data?.stats && data.stats.length > 0 ? data.stats : INITIAL_STATS
   const topThree = data?.topThree ?? {}
-  const rankings = data?.rankings && data.rankings.length > 0 ? data.rankings : (data ? [] : DEFAULT_RANKING_DATA)
-  const filters: LeaderboardFilterOption[] = data?.filters && data.filters.length > 0
-    ? data.filters
-    : [
-        { id: "ALL_TIME", label: "Mọi lúc", active: activeFilterId === "ALL_TIME" },
-        { id: "THIS_MONTH", label: "Tháng này", active: activeFilterId === "THIS_MONTH" },
-        { id: "LAST_7_DAYS", label: "7 ngày qua", active: activeFilterId === "LAST_7_DAYS" },
-      ]
+  const rankings = data?.rankings ?? []
+  const filters: LeaderboardFilterOption[] =
+    data?.filters && data.filters.length > 0
+      ? data.filters
+      : [
+          { id: "ALL_TIME", label: "Mọi lúc", active: activeFilterId === "ALL_TIME" },
+          { id: "THIS_MONTH", label: "Tháng này", active: activeFilterId === "THIS_MONTH" },
+          { id: "LAST_7_DAYS", label: "7 ngày qua", active: activeFilterId === "LAST_7_DAYS" },
+        ]
 
   return (
     <div className="flex flex-col items-center w-full min-h-screen pb-20 bg-slate-50/50 dark:bg-transparent">
       <div className="w-full max-w-6xl mx-auto px-4 pt-8">
-        <HeroSection stats={stats} />
+        <HeroSection stats={stats} isLoading={isLoading && !data} />
         <LeaderboardSection
           activeFilterId={activeFilterId}
           onSelectFilter={(id) => setActiveFilterId(id)}
@@ -140,7 +142,13 @@ function getStatIcon(iconKey?: string | null) {
   }
 }
 
-function HeroSection({ stats }: { stats: LeaderboardStatCard[] }) {
+function HeroSection({
+  stats,
+  isLoading,
+}: {
+  stats: LeaderboardStatCard[]
+  isLoading: boolean
+}) {
   return (
     <section className="w-full mb-12">
       <div className="bg-white dark:bg-slate-900 rounded-lg p-8 md:p-12 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] border border-slate-100 dark:border-slate-800">
@@ -156,8 +164,8 @@ function HeroSection({ stats }: { stats: LeaderboardStatCard[] }) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat, idx) => {
             const Icon = getStatIcon(stat.icon)
-            const isExpert = stat.key === "active_experts" || stat.sub?.startsWith("+")
-            const isThreat = stat.key === "neutralized_threats"
+            const isExpert = stat.key === "ACTIVE_EXPERTS" || stat.sub?.startsWith("+")
+            const isThreat = stat.key === "THREATS_NEUTRALIZED"
 
             return (
               <div
@@ -171,7 +179,7 @@ function HeroSection({ stats }: { stats: LeaderboardStatCard[] }) {
                   <Icon weight="light" className="text-slate-400 dark:text-slate-500 text-xl" />
                 </div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight">
-                  {stat.value}
+                  {isLoading ? "--" : stat.value}
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                   {isExpert && <ArrowUp weight="bold" className="text-blue-500" />}
@@ -208,26 +216,26 @@ function LeaderboardSection({
   isLoading,
   error,
 }: LeaderboardSectionProps) {
-  // Extract podium items with safe fallbacks
   const rank1 = topThree?.rank1
   const rank2 = topThree?.rank2
   const rank3 = topThree?.rank3
 
-  const rank1Name = rank1?.anonymousIdentifier || "Hunter_#1029"
-  const rank1Subtitle = rank1?.subtitle || "Định danh xác thực cấp cao"
+  // Honest display when podium entries are not present yet
+  const rank1Name = rank1?.anonymousIdentifier || "Chưa có dữ liệu"
+  const rank1Subtitle = rank1 ? (rank1.subtitle || "Định danh xác thực cấp cao") : "Đang chờ người đóng góp"
   const rank1Badge = rank1?.badge || "HẠNG NHẤT TOÀN QUỐC"
-  const rank1FooterLeft = rank1?.footerLeft || "An toàn tuyệt đối (Zero PII)"
-  const rank1FooterRight = rank1?.footerRight || "#VN-01"
+  const rank1FooterLeft = rank1 ? (rank1.footerLeft || "An toàn tuyệt đối (Zero PII)") : "Zero PII"
+  const rank1FooterRight = rank1 ? (rank1.footerRight || "#VN-01") : "--"
 
-  const rank2Name = rank2?.anonymousIdentifier || "Sentinel_#8842"
-  const rank2Subtitle = rank2?.subtitle || "Khu vực: VN-North (Ẩn danh)"
-  const rank2FooterLeft = rank2?.footerLeft || "Mã hóa PII"
-  const rank2FooterRight = rank2?.footerRight || "Top 0.05%"
+  const rank2Name = rank2?.anonymousIdentifier || "Chưa có dữ liệu"
+  const rank2Subtitle = rank2 ? (rank2.subtitle || "Khu vực ẩn danh") : "Đang chờ người đóng góp"
+  const rank2FooterLeft = rank2 ? (rank2.footerLeft || "Mã hóa PII") : "Mã hóa PII"
+  const rank2FooterRight = rank2 ? (rank2.footerRight || "Top --%") : "--"
 
-  const rank3Name = rank3?.anonymousIdentifier || "Member_#4912"
-  const rank3Subtitle = rank3?.subtitle || "Khu vực: VN-South (Ẩn danh)"
-  const rank3FooterLeft = rank3?.footerLeft || "Mã hóa PII"
-  const rank3FooterRight = rank3?.footerRight || "Top 0.1%"
+  const rank3Name = rank3?.anonymousIdentifier || "Chưa có dữ liệu"
+  const rank3Subtitle = rank3 ? (rank3.subtitle || "Khu vực ẩn danh") : "Đang chờ người đóng góp"
+  const rank3FooterLeft = rank3 ? (rank3.footerLeft || "Mã hóa PII") : "Mã hóa PII"
+  const rank3FooterRight = rank3 ? (rank3.footerRight || "Top --%") : "--"
 
   return (
     <section className="w-full mb-12">
@@ -270,8 +278,12 @@ function LeaderboardSection({
       )}
 
       {/* Top 3 Cards */}
-      <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 items-end transition-opacity duration-200", isLoading ? "opacity-60 pointer-events-none" : "opacity-100")}>
-
+      <div
+        className={cn(
+          "grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 items-end transition-opacity duration-200",
+          isLoading ? "opacity-60 pointer-events-none" : "opacity-100"
+        )}
+      >
         {/* Rank 2 */}
         <div className="bg-white dark:bg-slate-900 rounded-lg p-6 border-x border-b border-slate-100 dark:border-slate-800 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] border-t-[4px] border-t-indigo-200 dark:border-t-indigo-800 relative order-2 md:order-1 h-[90%]">
           <div className="flex justify-between items-start mb-6">
@@ -286,8 +298,12 @@ function LeaderboardSection({
               <Shield weight="fill" className="text-white text-lg" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">{rank2Name}</h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">{rank2Subtitle}</p>
+              <h3 className={cn("text-base font-bold", rank2 ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500 italic")}>
+                {rank2Name}
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                {rank2Subtitle}
+              </p>
             </div>
           </div>
 
@@ -318,7 +334,9 @@ function LeaderboardSection({
               <ShieldCheck weight="fill" className="text-cyan-400 text-2xl" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">{rank1Name}</h3>
+              <h3 className={cn("text-lg font-bold", rank1 ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500 italic")}>
+                {rank1Name}
+              </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
                 <LockKey weight="bold" size={12} /> {rank1Subtitle}
               </p>
@@ -347,8 +365,12 @@ function LeaderboardSection({
               <Shield weight="light" className="text-indigo-500 dark:text-indigo-400 text-lg" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">{rank3Name}</h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">{rank3Subtitle}</p>
+              <h3 className={cn("text-base font-bold", rank3 ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500 italic")}>
+                {rank3Name}
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                {rank3Subtitle}
+              </p>
             </div>
           </div>
 
@@ -359,7 +381,6 @@ function LeaderboardSection({
             <span className="text-[11px] font-bold text-slate-900 dark:text-white">{rank3FooterRight}</span>
           </div>
         </div>
-
       </div>
 
       {/* Table */}
@@ -384,7 +405,7 @@ function LeaderboardSection({
               {rankings.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 px-6 text-center text-xs text-slate-400">
-                    Chưa có đủ dữ liệu xếp hạng cho khoảng thời gian này.
+                    Chưa có dữ liệu xếp hạng cho khoảng thời gian này.
                   </td>
                 </tr>
               ) : (
