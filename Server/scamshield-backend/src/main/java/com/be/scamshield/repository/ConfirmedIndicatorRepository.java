@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface ConfirmedIndicatorRepository extends JpaRepository<ConfirmedIndicator, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -17,4 +18,6 @@ public interface ConfirmedIndicatorRepository extends JpaRepository<ConfirmedInd
             ORDER BY c.id
             """)
     List<ConfirmedIndicator> findForDispute(Collection<String> types, Collection<String> values);
+
+    Optional<ConfirmedIndicator> findByIndicatorId(Long indicatorId);
 }
