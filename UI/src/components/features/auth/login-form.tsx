@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { authServices } from "@/features/auth/services/auth-services"
 import { toast } from "react-toastify"
+import { loadGoogleIdentityScript } from "@/lib/google/google-auth"
+import { GoogleTokenDialog } from "@/components/features/auth/google-token-dialog"
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -95,6 +97,85 @@ export function LoginForm() {
   const router = useRouter()
 
   const [showPassword, setShowPassword] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isTokenDialogOpen, setIsTokenDialogOpen] = useState(false)
+
+  function redirectByRole(role: string) {
+    switch (role) {
+      case "ADMINISTRATOR":
+        router.push("/admin")
+        break
+      case "REGISTERED_USER":
+        router.push("/user")
+        break
+      case "MODERATOR":
+        router.push("/moderator")
+        break
+      case "GUEST":
+        router.push("/guest")
+        break
+      case "BUSINESS_PARTNER":
+        router.push("/business-partner")
+        break
+      default:
+        router.push("/")
+        break
+    }
+  }
+
+  async function handleGoogleTokenSubmit(idToken: string) {
+    setIsGoogleLoading(true)
+    setServerError(null)
+    try {
+      const response = await authServices.loginGoogle(idToken)
+      toast.success(response.message || "Đăng nhập Google thành công")
+      setIsTokenDialogOpen(false)
+      redirectByRole(response.role)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Đăng nhập Google thất bại"
+      setServerError(msg)
+      toast.error(msg)
+    } finally {
+      setIsGoogleLoading(false)
+    }
+  }
+
+  async function handleGoogleClick() {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      setIsTokenDialogOpen(true)
+      return
+    }
+
+    try {
+      setIsGoogleLoading(true)
+      await loadGoogleIdentityScript()
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response: { credential: string }) => {
+            if (response.credential) {
+              handleGoogleTokenSubmit(response.credential)
+            }
+          },
+        })
+        window.google.accounts.id.prompt((notification: unknown) => {
+          const n = notification as { isNotDisplayed?: () => boolean; isSkippedMoment?: () => boolean }
+          if (n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) {
+            setIsTokenDialogOpen(true)
+            setIsGoogleLoading(false)
+          }
+        })
+      } else {
+        setIsTokenDialogOpen(true)
+        setIsGoogleLoading(false)
+      }
+    } catch (e) {
+      console.error("GIS Error:", e)
+      setIsTokenDialogOpen(true)
+      setIsGoogleLoading(false)
+    }
+  }
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -524,6 +605,8 @@ export function LoginForm() {
                 <Button
                   type="button"
                   variant="outline"
+                  onClick={handleGoogleClick}
+                  disabled={isLoading || isGoogleLoading}
                   className={cn(
                     "h-12 w-full gap-3 rounded-xl",
                     "border-[#C6C6CE] bg-white shadow-sm",
@@ -531,9 +614,13 @@ export function LoginForm() {
                     "dark:border-border dark:bg-card dark:hover:bg-muted"
                   )}
                 >
-                  <GoogleIcon />
+                  {isGoogleLoading ? (
+                    <span className="size-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 dark:border-slate-600 dark:border-t-white" />
+                  ) : (
+                    <GoogleIcon />
+                  )}
                   <span className="text-sm font-bold text-[#131B2E] dark:text-foreground">
-                    Đăng nhập với Google
+                    {isGoogleLoading ? "Đang xử lý..." : "Đăng nhập với Google"}
                   </span>
                 </Button>
 
@@ -555,6 +642,14 @@ export function LoginForm() {
           </div>
         </div>
       </div>
+      <GoogleTokenDialog
+        isOpen={isTokenDialogOpen}
+        onClose={() => setIsTokenDialogOpen(false)}
+        onSubmit={handleGoogleTokenSubmit}
+        isLoading={isGoogleLoading}
+        title="Đăng nhập bằng Google ID Token"
+        description="Nhập hoặc dán Google ID Token (JWT) để kiểm thử API POST /api/auth/login/google trực tiếp."
+      />
     </section>
   )
 }
