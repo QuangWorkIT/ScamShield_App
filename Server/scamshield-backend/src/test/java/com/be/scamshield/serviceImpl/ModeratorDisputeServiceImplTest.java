@@ -255,4 +255,100 @@ class ModeratorDisputeServiceImplTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Phán quyết không hợp lệ");
     }
+
+    @Test
+    @DisplayName("makeDecision throws BadRequestException when dispute is already APPROVED")
+    void makeDecision_DisputeAlreadyApproved_ThrowsBadRequestException() {
+        sampleDispute.setStatus(DisputeStatus.APPROVED);
+        when(disputeRepository.findById(41L)).thenReturn(Optional.of(sampleDispute));
+
+        DisputeVerdictRequest request = DisputeVerdictRequest.builder()
+                .verdict("RETRACT")
+                .reason("Bằng chứng đã xử lý xong trước đó và đầy đủ 20 ký tự...")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision("41", request, "moderator@scamshield.vn"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Không thể ra phán quyết cho hồ sơ khiếu nại có trạng thái: APPROVED");
+
+        verify(disputeRepository, never()).save(any());
+        verify(auditLogRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("makeDecision throws BadRequestException when dispute is already REJECTED")
+    void makeDecision_DisputeAlreadyRejected_ThrowsBadRequestException() {
+        sampleDispute.setStatus(DisputeStatus.REJECTED);
+        when(disputeRepository.findById(41L)).thenReturn(Optional.of(sampleDispute));
+
+        DisputeVerdictRequest request = DisputeVerdictRequest.builder()
+                .verdict("UPHOLD")
+                .reason("Bằng chứng đã xử lý xong trước đó và đầy đủ 20 ký tự...")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision("41", request, "moderator@scamshield.vn"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Không thể ra phán quyết cho hồ sơ khiếu nại có trạng thái: REJECTED");
+
+        verify(disputeRepository, never()).save(any());
+        verify(auditLogRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("makeDecision throws BadRequestException when dispute is in DRAFT status")
+    void makeDecision_DisputeDraft_ThrowsBadRequestException() {
+        sampleDispute.setStatus(DisputeStatus.DRAFT);
+        when(disputeRepository.findById(41L)).thenReturn(Optional.of(sampleDispute));
+
+        DisputeVerdictRequest request = DisputeVerdictRequest.builder()
+                .verdict("RETRACT")
+                .reason("Bằng chứng cho bản nháp chưa gửi đi đủ 20 ký tự...")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision("41", request, "moderator@scamshield.vn"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Không thể ra phán quyết cho hồ sơ khiếu nại có trạng thái: DRAFT");
+
+        verify(disputeRepository, never()).save(any());
+        verify(auditLogRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("makeDecision throws ResourceNotFoundException when specified moderator user is not found")
+    void makeDecision_ModeratorNotFound_ThrowsResourceNotFoundException() {
+        when(disputeRepository.findById(41L)).thenReturn(Optional.of(sampleDispute));
+        when(userRepository.findByEmailOrPhoneNumber("nonexistent@scamshield.vn")).thenReturn(Optional.empty());
+
+        DisputeVerdictRequest request = DisputeVerdictRequest.builder()
+                .verdict("RETRACT")
+                .reason("Bằng chứng hợp lệ đủ 20 ký tự cần xử lý thẩm định...")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision("41", request, "nonexistent@scamshield.vn"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Không tìm thấy thông tin tài khoản kiểm duyệt viên: nonexistent@scamshield.vn");
+
+        verify(disputeRepository, never()).save(any());
+        verify(auditLogRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("makeDecision preserves existing behavior when moderator username is blank")
+    void makeDecision_BlankModeratorUsername_PreservesExistingBehavior() {
+        when(disputeRepository.findById(41L)).thenReturn(Optional.of(sampleDispute));
+        when(disputeRepository.save(any(Dispute.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DisputeVerdictRequest request = DisputeVerdictRequest.builder()
+                .verdict("UPHOLD")
+                .reason("Bằng chứng không hợp lệ đầy đủ tối thiểu 20 ký tự...")
+                .build();
+
+        ModeratorDisputeResponse response = service.makeDecision("41", request, null);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo("Từ chối");
+        assertThat(sampleDispute.getResolvedByUser()).isNull();
+        verify(userRepository, never()).findByEmailOrPhoneNumber(any());
+        verify(disputeRepository).save(sampleDispute);
+    }
 }

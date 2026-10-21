@@ -117,6 +117,12 @@ public class ModeratorDisputeServiceImpl implements IModeratorDisputeService {
         Dispute dispute = disputeRepository.findById(disputeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hồ sơ khiếu nại với mã/ID: " + idOrCode));
 
+        if (dispute.getStatus() == DisputeStatus.APPROVED 
+                || dispute.getStatus() == DisputeStatus.REJECTED 
+                || dispute.getStatus() == DisputeStatus.DRAFT) {
+            throw new BadRequestException("Không thể ra phán quyết cho hồ sơ khiếu nại có trạng thái: " + dispute.getStatus());
+        }
+
         String rawVerdict = request.getVerdict().trim().toUpperCase(Locale.ROOT);
         boolean isRetract;
         if ("RETRACT".equals(rawVerdict) || "APPROVED".equals(rawVerdict) || "ACCEPT".equals(rawVerdict)) {
@@ -129,7 +135,8 @@ public class ModeratorDisputeServiceImpl implements IModeratorDisputeService {
 
         User moderator = null;
         if (StringUtils.hasText(currentModeratorUsername)) {
-            moderator = userRepository.findByEmailOrPhoneNumber(currentModeratorUsername).orElse(null);
+            moderator = userRepository.findByEmailOrPhoneNumber(currentModeratorUsername)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin tài khoản kiểm duyệt viên: " + currentModeratorUsername));
         }
 
         LocalDateTime now = LocalDateTime.now(VIETNAM_ZONE);
