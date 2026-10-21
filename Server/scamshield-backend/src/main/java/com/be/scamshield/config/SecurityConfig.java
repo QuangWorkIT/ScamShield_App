@@ -101,6 +101,7 @@ public class SecurityConfig {
                                 "/api/v1/scam-check/ping"
                         ).permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
+                        .requestMatchers("/api/moderator/**").hasAnyRole("MODERATOR")
                         .anyRequest().authenticated()
                 );
 

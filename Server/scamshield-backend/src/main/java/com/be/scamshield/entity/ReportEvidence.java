@@ -3,6 +3,8 @@ package com.be.scamshield.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "report_evidence")
 @Data
@@ -23,6 +25,9 @@ public class ReportEvidence {
     @Column(name = "evidence_type", nullable = false)
     private String evidenceType;
 
+    @Column(name = "file_name")
+    private String fileName;
+
     @Column(name = "file_url")
     private String fileUrl;
 
@@ -42,6 +47,6 @@ public class ReportEvidence {
     private String verificationStatus;
 
     @Column(name = "created_at", nullable = false)
-    private java.time.LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
 }
