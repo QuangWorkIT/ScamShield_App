@@ -20,8 +20,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { authServices } from "@/features/auth/services/auth-services"
 import { toast } from "react-toastify"
-import { loadGoogleIdentityScript } from "@/lib/google/google-auth"
-import { GoogleTokenDialog } from "@/components/features/auth/google-token-dialog"
+import { GoogleAuthButton } from "@/components/features/auth/google-auth-button"
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -98,7 +97,6 @@ export function LoginForm() {
 
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const [isTokenDialogOpen, setIsTokenDialogOpen] = useState(false)
 
   function redirectByRole(role: string) {
     switch (role) {
@@ -123,56 +121,18 @@ export function LoginForm() {
     }
   }
 
-  async function handleGoogleTokenSubmit(idToken: string) {
+  async function handleGoogleOAuthSuccess(credential: string) {
     setIsGoogleLoading(true)
     setServerError(null)
     try {
-      const response = await authServices.loginGoogle(idToken)
+      const response = await authServices.loginGoogle(credential)
       toast.success(response.message || "Đăng nhập Google thành công")
-      setIsTokenDialogOpen(false)
       redirectByRole(response.role)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Đăng nhập Google thất bại"
       setServerError(msg)
       toast.error(msg)
     } finally {
-      setIsGoogleLoading(false)
-    }
-  }
-
-  async function handleGoogleClick() {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    if (!clientId) {
-      setIsTokenDialogOpen(true)
-      return
-    }
-
-    try {
-      setIsGoogleLoading(true)
-      await loadGoogleIdentityScript()
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response: { credential: string }) => {
-            if (response.credential) {
-              handleGoogleTokenSubmit(response.credential)
-            }
-          },
-        })
-        window.google.accounts.id.prompt((notification: unknown) => {
-          const n = notification as { isNotDisplayed?: () => boolean; isSkippedMoment?: () => boolean }
-          if (n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) {
-            setIsTokenDialogOpen(true)
-            setIsGoogleLoading(false)
-          }
-        })
-      } else {
-        setIsTokenDialogOpen(true)
-        setIsGoogleLoading(false)
-      }
-    } catch (e) {
-      console.error("GIS Error:", e)
-      setIsTokenDialogOpen(true)
       setIsGoogleLoading(false)
     }
   }
@@ -601,28 +561,18 @@ export function LoginForm() {
                   </span>
                 </div>
 
-                {/* Google Sign-In */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleGoogleClick}
-                  disabled={isLoading || isGoogleLoading}
-                  className={cn(
-                    "h-12 w-full gap-3 rounded-xl",
-                    "border-[#C6C6CE] bg-white shadow-sm",
-                    "hover:bg-[#F2F3FF] active:scale-[0.99]",
-                    "dark:border-border dark:bg-card dark:hover:bg-muted"
-                  )}
-                >
-                  {isGoogleLoading ? (
-                    <span className="size-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 dark:border-slate-600 dark:border-t-white" />
-                  ) : (
-                    <GoogleIcon />
-                  )}
-                  <span className="text-sm font-bold text-[#131B2E] dark:text-foreground">
-                    {isGoogleLoading ? "Đang xử lý..." : "Đăng nhập với Google"}
-                  </span>
-                </Button>
+                {/* Google Sign-In via OAuth 2.0 */}
+                <GoogleAuthButton
+                  text="signin_with"
+                  onSuccess={handleGoogleOAuthSuccess}
+                  onError={(err) => {
+                    const msg = err || "Đăng nhập Google OAuth 2.0 thất bại"
+                    setServerError(msg)
+                    toast.error(msg)
+                  }}
+                  isLoading={isGoogleLoading}
+                  disabled={isLoading}
+                />
 
                 {/* Registration Link */}
                 <p className="pt-4 text-center text-sm text-[#45464D] dark:text-muted-foreground">
@@ -642,14 +592,7 @@ export function LoginForm() {
           </div>
         </div>
       </div>
-      <GoogleTokenDialog
-        isOpen={isTokenDialogOpen}
-        onClose={() => setIsTokenDialogOpen(false)}
-        onSubmit={handleGoogleTokenSubmit}
-        isLoading={isGoogleLoading}
-        title="Đăng nhập bằng Google ID Token"
-        description="Nhập hoặc dán Google ID Token (JWT) để kiểm thử API POST /api/auth/login/google trực tiếp."
-      />
+
     </section>
   )
 }

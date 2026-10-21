@@ -41,6 +41,10 @@ declare global {
 
 let scriptLoadPromise: Promise<void> | null = null
 
+export function getGoogleClientId(): string {
+  return process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""
+}
+
 export function loadGoogleIdentityScript(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve()
   if (window.google?.accounts?.id) return Promise.resolve()
