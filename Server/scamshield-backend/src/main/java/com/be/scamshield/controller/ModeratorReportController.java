@@ -7,6 +7,7 @@ import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
 import com.be.scamshield.dto.response.ModeratorReportResponse;
 import com.be.scamshield.service.IModeratorReportService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -63,6 +65,16 @@ public class ModeratorReportController {
     public ResponseEntity<BaseResponse<ModeratorQueueCountsResponse>> getQueueCounts() {
         ModeratorQueueCountsResponse counts = moderatorReportService.getQueueCounts();
         return ResponseEntity.ok(new BaseResponse<>(true, "Lấy số lượng hàng đợi xét duyệt thành công", counts));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Lấy thông tin chi tiết một ca báo cáo lừa đảo",
+            description = "Trả về thông tin chi tiết của một ca báo cáo theo ID bao gồm đối tượng, danh mục, bằng chứng, người báo cáo và mức độ ưu tiên")
+    public ResponseEntity<BaseResponse<ModeratorReportResponse>> getReportById(
+            @Parameter(description = "ID gốc của hồ sơ báo cáo (ví dụ: 1891)")
+            @PathVariable Long id) {
+        ModeratorReportResponse report = moderatorReportService.getReportById(id);
+        return ResponseEntity.ok(new BaseResponse<>(true, "Lấy chi tiết hồ sơ báo cáo thành công", report));
     }
 
     private Pageable createPageable(ModeratorReportFilterRequest filter) {

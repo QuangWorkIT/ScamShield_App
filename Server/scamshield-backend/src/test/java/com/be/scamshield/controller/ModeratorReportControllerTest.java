@@ -7,6 +7,7 @@ import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
 import com.be.scamshield.dto.response.ModeratorEvidenceResponse;
 import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
 import com.be.scamshield.dto.response.ModeratorReportResponse;
+import com.be.scamshield.exception.ResourceNotFoundException;
 import com.be.scamshield.security.CustomAccessDeniedHandler;
 import com.be.scamshield.security.CustomUserDetailsService;
 import com.be.scamshield.security.JwtAuthenticationEntryPoint;
@@ -207,5 +208,41 @@ class ModeratorReportControllerTest {
                 .andExpect(jsonPath("$.data.pending").value(3))
                 .andExpect(jsonPath("$.data.inReview").value(1))
                 .andExpect(jsonPath("$.data.locked").value(2));
+    }
+
+    @Test
+    void getReportById_WhenModeratorAndFound_ReturnsSuccess() throws Exception {
+        when(moderatorReportService.getReportById(1891L)).thenReturn(mockReportResponse);
+
+        mvc.perform(get(BASE_URL + "/1891")
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.id").value("CS-2024-1891"))
+                .andExpect(jsonPath("$.data.targetIdentifier").value("0909 123 456"));
+    }
+
+    @Test
+    void getReportById_WhenNotFound_ReturnsNotFound() throws Exception {
+        when(moderatorReportService.getReportById(9999L))
+                .thenThrow(new ResourceNotFoundException("Không tìm thấy hồ sơ báo cáo với ID: 9999"));
+
+        mvc.perform(get(BASE_URL + "/9999")
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.isSuccess").value(false));
+    }
+
+    @Test
+    void getReportById_WhenRegularUser_ReturnsForbidden() throws Exception {
+        mvc.perform(get(BASE_URL + "/1891")
+                        .with(authentication(userAuth)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void getReportById_WhenUnauthenticated_ReturnsUnauthorized() throws Exception {
+        mvc.perform(get(BASE_URL + "/1891"))
+                .andExpect(status().isUnauthorized());
     }
 }
