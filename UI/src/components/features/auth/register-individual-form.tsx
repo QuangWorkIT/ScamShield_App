@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { toast } from "react-toastify"
-import { loadGoogleIdentityScript } from "@/lib/google/google-auth"
-import { GoogleTokenDialog } from "@/components/features/auth/google-token-dialog"
+import { GoogleAuthButton } from "@/components/features/auth/google-auth-button"
 import { GoogleRegisterModal } from "@/components/features/auth/google-register-modal"
 import { authServices } from "@/features/auth/services/auth-services"
 import { getRecaptchaToken } from "@/lib/firebase/recaptcha"
@@ -91,51 +90,12 @@ interface FormErrors {
 export function RegisterIndividualForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const [isGoogleTokenDialogOpen, setIsGoogleTokenDialogOpen] = useState(false)
   const [isGoogleRegisterModalOpen, setIsGoogleRegisterModalOpen] = useState(false)
   const [googleIdToken, setGoogleIdToken] = useState("")
 
-  function handleGoogleTokenReceived(token: string) {
-    setGoogleIdToken(token)
-    setIsGoogleTokenDialogOpen(false)
+  function handleGoogleOAuthSuccess(credential: string) {
+    setGoogleIdToken(credential)
     setIsGoogleRegisterModalOpen(true)
-  }
-
-  async function handleGoogleClick() {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    if (!clientId) {
-      setIsGoogleTokenDialogOpen(true)
-      return
-    }
-
-    try {
-      setIsGoogleLoading(true)
-      await loadGoogleIdentityScript()
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response: { credential: string }) => {
-            if (response.credential) {
-              handleGoogleTokenReceived(response.credential)
-            }
-          },
-        })
-        window.google.accounts.id.prompt((notification: unknown) => {
-          const n = notification as { isNotDisplayed?: () => boolean; isSkippedMoment?: () => boolean }
-          if (n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) {
-            setIsGoogleTokenDialogOpen(true)
-            setIsGoogleLoading(false)
-          }
-        })
-      } else {
-        setIsGoogleTokenDialogOpen(true)
-        setIsGoogleLoading(false)
-      }
-    } catch (e) {
-      console.error("GIS Error:", e)
-      setIsGoogleTokenDialogOpen(true)
-      setIsGoogleLoading(false)
-    }
   }
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
@@ -479,22 +439,16 @@ export function RegisterIndividualForm() {
 
           {/* Quick Google SSO */}
           <div className="flex flex-col gap-5">
-            <button
-              type="button"
-              onClick={handleGoogleClick}
-              disabled={isSubmitting || isGoogleLoading}
-              className={cn(
-                "flex h-12 w-full items-center justify-center gap-2.5 rounded-lg border border-[#EAEDFF] bg-white px-4 text-sm font-semibold text-[#131B2E] transition-all",
-                "hover:bg-[#FAF8FF] dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted/50"
-              )}
-            >
-              {isGoogleLoading ? (
-                <span className="size-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 dark:border-slate-600 dark:border-t-white" />
-              ) : (
-                <GoogleIcon className="size-5 shrink-0" />
-              )}
-              <span>{isGoogleLoading ? "Đang kết nối Google..." : "Đăng ký bằng Google"}</span>
-            </button>
+            <GoogleAuthButton
+              text="signup_with"
+              label="Đăng ký bằng Google"
+              onSuccess={handleGoogleOAuthSuccess}
+              onError={(err) => {
+                toast.error(err || "Kết nối Google OAuth 2.0 thất bại")
+              }}
+              isLoading={isGoogleLoading}
+              disabled={isSubmitting}
+            />
 
             {/* Divider */}
             <div className="flex items-center gap-3">
@@ -696,15 +650,7 @@ export function RegisterIndividualForm() {
           </div>
         </div>
       </div>
-      {/* Google Token Dialog for Dev / Fallback */}
-      <GoogleTokenDialog
-        isOpen={isGoogleTokenDialogOpen}
-        onClose={() => setIsGoogleTokenDialogOpen(false)}
-        onSubmit={handleGoogleTokenReceived}
-        isLoading={isGoogleLoading}
-        title="Đăng ký bằng Google ID Token"
-        description="Nhập hoặc dán Google ID Token (JWT) để tiếp tục quy trình đăng ký tài khoản qua Google."
-      />
+
 
       {/* Google Registration Phone & OTP Verification Modal */}
       {isGoogleRegisterModalOpen && googleIdToken && (
