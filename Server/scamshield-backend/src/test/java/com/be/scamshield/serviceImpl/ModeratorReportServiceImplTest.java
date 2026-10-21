@@ -272,6 +272,21 @@ class ModeratorReportServiceImplTest {
     }
 
     @Test
+    void getReportQueue_WithSearchFilter_BuildsValidSpecification() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(reportRepository.findAll(any(Specification.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(testReport), pageable, 1));
+        when(reportEvidenceRepository.findByReportIdIn(List.of(1891L)))
+                .thenReturn(List.of(testEvidence));
+
+        ModeratorReportFilterRequest filter = ModeratorReportFilterRequest.builder()
+                .search("OTP Phishing lừa đảo qua tin nhắn")
+                .build();
+        PaginatedResponse<ModeratorReportResponse> response = service.getReportQueue(filter, pageable);
+        assertThat(response.getData()).hasSize(1);
+    }
+
+    @Test
     void makeDecision_WhenApprove_UpdatesStatusAndBulkApprovesPendingReportsOfSameIndicator() {
         User secondUser = User.builder()
                 .id(20L)
@@ -297,6 +312,10 @@ class ModeratorReportServiceImplTest {
         when(scamCategorieRepository.findById(1L)).thenReturn(Optional.of(testCategory));
         when(reportRepository.findByIndicatorIdAndStatusIgnoreCase(100L, "PENDING"))
                 .thenReturn(List.of(testReport, secondReport));
+        when(reportRepository.findByIndicatorIdAndStatusIgnoreCase(100L, "IN_REVIEW"))
+                .thenReturn(List.of());
+        when(reportRepository.findByIndicatorIdAndStatusIgnoreCase(100L, "IN_REVIEW"))
+                .thenReturn(List.of());
         when(confirmedIndicatorRepository.findByIndicatorId(100L)).thenReturn(Optional.empty());
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(reportEvidenceRepository.findByReportId(1891L)).thenReturn(List.of(testEvidence));
@@ -350,6 +369,8 @@ class ModeratorReportServiceImplTest {
         when(userRepository.findById(99L)).thenReturn(Optional.of(moderatorUser));
         when(reportRepository.findByIndicatorIdAndStatusIgnoreCase(100L, "PENDING"))
                 .thenReturn(List.of(testReport, secondReport));
+        when(reportRepository.findByIndicatorIdAndStatusIgnoreCase(100L, "IN_REVIEW"))
+                .thenReturn(List.of());
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(reportEvidenceRepository.findByReportId(1891L)).thenReturn(List.of(testEvidence));
 
@@ -395,5 +416,123 @@ class ModeratorReportServiceImplTest {
         assertThatThrownBy(() -> service.makeDecision(9999L, moderatorPrincipal, request))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("9999");
+    }
+
+    @Test
+    void makeDecision_WhenReportLocked_ThrowsBadRequestException() {
+        testReport.setModerationLocked(true);
+        when(reportRepository.findById(1891L)).thenReturn(Optional.of(testReport));
+
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Thử lại quyết định kiểm duyệt cho hồ sơ đang bị khóa")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision(1891L, moderatorPrincipal, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("đang bị khóa kiểm duyệt");
+    }
+
+    @Test
+    void makeDecision_WhenReportStatusNullOrInvalid_ThrowsBadRequestException() {
+        testReport.setStatus(null);
+        when(reportRepository.findById(1891L)).thenReturn(Optional.of(testReport));
+
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Thử lại quyết định kiểm duyệt cho hồ sơ không có trạng thái hợp lệ")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision(1891L, moderatorPrincipal, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Không thể xử lý hồ sơ ở trạng thái hiện tại");
+    }
+
+    @Test
+    void makeDecision_WhenSiblingReportInReviewAndNotLocked_BulkProcessesIt() {
+        Report inReviewReport = Report.builder()
+                .id(1893L)
+                .indicator(testIndicator)
+                .category(testCategory)
+                .reporterUser(testUser)
+                .status("IN_REVIEW")
+                .moderationLocked(false)
+                .createdAt(LocalDateTime.of(2024, 1, 15, 16, 0))
+                .build();
+
+        Report lockedReport = Report.builder()
+                .id(1894L)
+                .indicator(testIndicator)
+                .category(testCategory)
+                .reporterUser(testUser)
+                .status("IN_REVIEW")
+                .moderationLocked(true)
+                .createdAt(LocalDateTime.of(2024, 1, 15, 17, 0))
+                .build();
+
+        when(reportRepository.findById(1891L)).thenReturn(Optional.of(testReport));
+        when(userRepository.findById(99L)).thenReturn(Optional.of(moderatorUser));
+        when(reportRepository.findByIndicatorIdAndStatusIgnoreCase(100L, "PENDING"))
+                .thenReturn(List.of(testReport));
+        when(reportRepository.findByIndicatorIdAndStatusIgnoreCase(100L, "IN_REVIEW"))
+                .thenReturn(List.of(inReviewReport, lockedReport));
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reportEvidenceRepository.findByReportId(1891L)).thenReturn(List.of(testEvidence));
+
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Xác minh bằng chứng đối chiếu với sao kê ngân hàng thành công đầy đủ")
+                .build();
+
+        service.makeDecision(1891L, moderatorPrincipal, request);
+
+        assertThat(testReport.getStatus()).isEqualTo("APPROVED");
+        assertThat(inReviewReport.getStatus()).isEqualTo("APPROVED");
+        // Locked sibling report must be untouched
+        assertThat(lockedReport.getStatus()).isEqualTo("IN_REVIEW");
+    }
+
+    @Test
+    void makeDecision_WhenCurrentUserNull_ThrowsBadRequestException() {
+        when(reportRepository.findById(1891L)).thenReturn(Optional.of(testReport));
+
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Thẩm định kiểm duyệt với principal null")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision(1891L, null, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Thông tin định danh kiểm duyệt viên không hợp lệ");
+    }
+
+    @Test
+    void makeDecision_WhenCurrentUserIdNull_ThrowsBadRequestException() {
+        when(reportRepository.findById(1891L)).thenReturn(Optional.of(testReport));
+        UserPrincipal noIdPrincipal = UserPrincipal.builder().username("mod").build();
+
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Thẩm định kiểm duyệt với principal không có id")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision(1891L, noIdPrincipal, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Thông tin định danh kiểm duyệt viên không hợp lệ");
+    }
+
+    @Test
+    void makeDecision_WhenModeratorUserNotFoundInDb_ThrowsResourceNotFoundException() {
+        when(reportRepository.findById(1891L)).thenReturn(Optional.of(testReport));
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Thẩm định kiểm duyệt với tài khoản kiểm duyệt viên không tồn tại trong DB")
+                .build();
+
+        assertThatThrownBy(() -> service.makeDecision(1891L, moderatorPrincipal, request))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Không tìm thấy thông tin tài khoản kiểm duyệt viên");
     }
 }

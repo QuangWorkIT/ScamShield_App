@@ -1,6 +1,7 @@
 package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.constant.ReportPriority;
+import com.be.scamshield.constant.ReportStatus;
 import com.be.scamshield.dto.PaginatedResponse;
 import com.be.scamshield.dto.request.ModeratorDecisionRequest;
 import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
@@ -43,6 +44,10 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM HH:mm");
     private static final Pattern CASE_CODE_PATTERN = Pattern.compile("(?i)CS-\\d{4}-(\\d+)");
+    private static final Set<String> DECIDABLE_STATUSES = Set.of(
+            ReportStatus.PENDING.name(),
+            ReportStatus.IN_REVIEW.name()
+    );
 
     private final ReportRepository reportRepository;
     private final ReportEvidenceRepository reportEvidenceRepository;
@@ -140,8 +145,15 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hồ sơ báo cáo với ID: " + reportId));
 
         String previousStatus = report.getStatus();
-        if ("APPROVED".equalsIgnoreCase(previousStatus) || "REJECTED".equalsIgnoreCase(previousStatus)) {
-            throw new BadRequestException("Hồ sơ báo cáo này đã có quyết định xử lý trước đó (" + previousStatus + ")");
+        if (Boolean.TRUE.equals(report.getModerationLocked()) || "LOCKED".equalsIgnoreCase(previousStatus)) {
+            throw new BadRequestException("Hồ sơ báo cáo đang bị khóa kiểm duyệt, không thể xử lý");
+        }
+
+        if (previousStatus == null || !DECIDABLE_STATUSES.contains(previousStatus.toUpperCase())) {
+            if ("APPROVED".equalsIgnoreCase(previousStatus) || "REJECTED".equalsIgnoreCase(previousStatus)) {
+                throw new BadRequestException("Hồ sơ báo cáo này đã có quyết định xử lý trước đó (" + previousStatus + ")");
+            }
+            throw new BadRequestException("Không thể xử lý hồ sơ ở trạng thái hiện tại (" + previousStatus + ")");
         }
 
         User moderatorUser = resolveModeratorUser(currentUser);
@@ -159,16 +171,20 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy danh mục lừa đảo với ID: " + request.getCategoryId()));
         }
 
-        // Find all reports of this Indicator currently in PENDING status to process in bulk
+        // Find all reports of this Indicator currently in eligible decidable statuses (PENDING, IN_REVIEW) to process in bulk
         List<Report> reportsToProcess = new ArrayList<>();
         reportsToProcess.add(report);
 
         if (report.getIndicator() != null) {
-            List<Report> otherPendingReports = reportRepository.findByIndicatorIdAndStatusIgnoreCase(
-                    report.getIndicator().getId(), "PENDING");
-            for (Report pendingReport : otherPendingReports) {
-                if (!pendingReport.getId().equals(report.getId())) {
-                    reportsToProcess.add(pendingReport);
+            for (String decidableStatus : DECIDABLE_STATUSES) {
+                List<Report> siblingReports = reportRepository.findByIndicatorIdAndStatusIgnoreCase(
+                        report.getIndicator().getId(), decidableStatus);
+                for (Report siblingReport : siblingReports) {
+                    if (!siblingReport.getId().equals(report.getId())
+                            && !Boolean.TRUE.equals(siblingReport.getModerationLocked())
+                            && !"LOCKED".equalsIgnoreCase(siblingReport.getStatus())) {
+                        reportsToProcess.add(siblingReport);
+                    }
                 }
             }
         }
@@ -189,31 +205,29 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
             reportRepository.save(r);
 
             // Save ModerationAction
-            if (moderatorUser != null) {
-                ModerationAction action = ModerationAction.builder()
-                        .report(r)
-                        .moderatorUser(moderatorUser)
-                        .action(request.getDecision().name())
-                        .reason(request.getReason())
-                        .previousStatus(prevStatus)
-                        .newStatus(newReportStatus)
-                        .createdAt(now)
-                        .build();
-                moderationActionRepository.save(action);
+            ModerationAction action = ModerationAction.builder()
+                    .report(r)
+                    .moderatorUser(moderatorUser)
+                    .action(request.getDecision().name())
+                    .reason(request.getReason())
+                    .previousStatus(prevStatus)
+                    .newStatus(newReportStatus)
+                    .createdAt(now)
+                    .build();
+            moderationActionRepository.save(action);
 
-                // Save AuditLog
-                AuditLog auditLog = AuditLog.builder()
-                        .actorUser(moderatorUser)
-                        .action("MODERATION_" + request.getDecision().name())
-                        .entityType("REPORT")
-                        .entityId(r.getId())
-                        .previousValue(prevStatus)
-                        .newValue(newReportStatus)
-                        .reason(request.getReason())
-                        .createdAt(now)
-                        .build();
-                auditLogRepository.save(auditLog);
-            }
+            // Save AuditLog
+            AuditLog auditLog = AuditLog.builder()
+                    .actorUser(moderatorUser)
+                    .action("MODERATION_" + request.getDecision().name())
+                    .entityType("REPORT")
+                    .entityId(r.getId())
+                    .previousValue(prevStatus)
+                    .newValue(newReportStatus)
+                    .reason(request.getReason())
+                    .createdAt(now)
+                    .build();
+            auditLogRepository.save(auditLog);
 
             // Reporter rewards and notifications
             if (r.getReporterUser() != null) {
@@ -299,16 +313,11 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
     }
 
     private User resolveModeratorUser(UserPrincipal currentUser) {
-        if (currentUser != null && currentUser.getId() != null) {
-            return userRepository.findById(currentUser.getId())
-                    .orElseGet(this::getFallbackModeratorUser);
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new BadRequestException("Thông tin định danh kiểm duyệt viên không hợp lệ");
         }
-        return getFallbackModeratorUser();
-    }
-
-    private User getFallbackModeratorUser() {
-        return userRepository.findAll().stream().findFirst()
-                .orElse(null);
+        return userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin tài khoản kiểm duyệt viên với ID: " + currentUser.getId()));
     }
 
     private Specification<Report> createFilterSpecification(ModeratorReportFilterRequest filter) {
@@ -376,6 +385,8 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
                 searchPredicates.add(cb.like(cb.lower(userJoin.get("fullName")), searchLike));
                 searchPredicates.add(cb.like(cb.lower(userJoin.get("email")), searchLike));
                 searchPredicates.add(cb.like(cb.lower(userJoin.get("phoneNumber")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(root.get("reportedMessage")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(root.get("description")), searchLike));
 
                 predicates.add(cb.or(searchPredicates.toArray(new Predicate[0])));
             }
