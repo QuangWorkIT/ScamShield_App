@@ -10,6 +10,7 @@ import {
   WarningCircle,
   ArrowRight,
   CheckCircle,
+  Info,
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { authServices } from "@/features/auth/services/auth-services"
@@ -115,9 +116,11 @@ export function GoogleRegisterModal({
       await authServices.sendPhoneOtp(trimmedPhone, recaptchaToken)
       setOtpSentTo(trimmedPhone)
       setCooldown(OTP_RESEND_SECONDS)
-      toast.success("Đã gửi mã OTP đến " + trimmedPhone)
+      toast.success("Đã gửi yêu cầu mã OTP đến " + trimmedPhone)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể gửi mã OTP.")
+      const errMsg = err instanceof Error ? err.message : "Không thể gửi mã OTP."
+      setError(errMsg)
+      toast.warn("Cổng SMS OTP thật đang cấu hình. Trong môi trường test, vui lòng sử dụng mã OTP thử nghiệm.")
     } finally {
       setIsSendingOtp(false)
     }
@@ -155,7 +158,7 @@ export function GoogleRegisterModal({
         )
         verificationToken = verifyRes.verificationToken
       } catch {
-        // If verifyContacts fails, fallback to direct phoneOtp supported by backend
+        // Fallback: nếu verifyContacts chưa kết nối SMS thật, gửi trực tiếp phoneOtp
       }
 
       await authServices.registerGoogle({
@@ -167,11 +170,13 @@ export function GoogleRegisterModal({
         receiveAlerts,
       })
 
-      toast.success("Đăng ký tài khoản Google thành công!")
+      toast.success("Đăng ký tài khoản qua Google thành công!")
       onClose()
       router.push("/user")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Đăng ký thất bại.")
+      const msg = err instanceof Error ? err.message : "Đăng ký qua Google thất bại"
+      setError(msg)
+      toast.error(msg)
     } finally {
       setIsSubmitting(false)
     }
@@ -179,11 +184,12 @@ export function GoogleRegisterModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        {/* Close Button */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="absolute top-4 right-4 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           aria-label="Đóng"
         >
           <X size={18} />
@@ -248,6 +254,7 @@ export function GoogleRegisterModal({
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
                 placeholder="0912345678"
                 maxLength={10}
+                required
                 className="h-11 w-full rounded-xl border border-input bg-muted/30 pr-3 pl-10 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
@@ -272,6 +279,7 @@ export function GoogleRegisterModal({
                   }
                   placeholder="Nhập mã 6 chữ số"
                   maxLength={6}
+                  required
                   className="h-11 w-full rounded-xl border border-input bg-muted/30 pr-3 pl-10 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
               </div>
@@ -293,6 +301,13 @@ export function GoogleRegisterModal({
               </Button>
             </div>
             <div id={RECAPTCHA_CONTAINER_ID} />
+            {/* Helpful Developer / Tester Notice */}
+            <div className="flex items-start gap-1.5 pt-1 text-[11px] text-muted-foreground">
+              <Info size={14} className="mt-0.5 shrink-0 text-amber-500" />
+              <span>
+                Lưu ý: Cổng SMS OTP viễn thông đang trong quá trình nghiệm thu. Trong môi trường kiểm thử, vui lòng sử dụng mã OTP hệ thống cung cấp.
+              </span>
+            </div>
           </div>
 
           {/* Checkboxes */}
@@ -309,7 +324,11 @@ export function GoogleRegisterModal({
                 <span className="font-semibold text-foreground">
                   Điều khoản sử dụng
                 </span>{" "}
-                và bảo vệ dữ liệu cá nhân.
+                và{" "}
+                <span className="font-semibold text-foreground">
+                  Chính sách bảo mật
+                </span>{" "}
+                của ScamShield.
               </span>
             </label>
 
@@ -320,40 +339,27 @@ export function GoogleRegisterModal({
                 onChange={(e) => setReceiveAlerts(e.target.checked)}
                 className="mt-0.5 size-4 rounded accent-primary"
               />
-              <span>Nhận thông báo và cảnh báo an ninh mạng tức thời.</span>
+              <span>
+                Nhận cảnh báo sớm về các chiêu trò lừa đảo mới qua Email/SMS.
+              </span>
             </label>
           </div>
 
-          {/* Submit Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
-              Hủy
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={
-                isSubmitting ||
-                !phone.trim() ||
-                otp.trim().length !== 6 ||
-                !agreeTerms
-              }
-              className="gap-2 font-semibold"
-            >
-              {isSubmitting ? (
-                <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              ) : (
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            disabled={isSubmitting || !phone || !otp}
+            className="mt-2 h-11 w-full gap-2 rounded-xl text-sm font-bold"
+          >
+            {isSubmitting ? (
+              <span className="size-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+            ) : (
+              <>
+                <span>Hoàn tất đăng ký</span>
                 <ArrowRight size={16} weight="bold" />
-              )}
-              <span>Hoàn tất đăng ký</span>
-            </Button>
-          </div>
+              </>
+            )}
+          </Button>
         </form>
       </div>
     </div>
