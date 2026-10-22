@@ -11,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
@@ -33,7 +31,7 @@ public class ScamCheckQuotaService {
     @Value("${app.scam-check.registered-daily-limit:10}")
     private int registeredDailyLimit = 10;
 
-    public void reserve(User user, GuestSession guest) {
+    public String reserve(User user, GuestSession guest) {
         int limit = dailyLimit(user);
         if (limit <= 0) {
             log.warn("Scam check quota disabled: ownerType={}, limit={}", user == null ? "GUEST" : "USER", limit);
@@ -58,17 +56,11 @@ public class ScamCheckQuotaService {
             throw exhausted();
         }
         log.info("Scam check quota reserved: ownerType={}, used={}, limit={}", user == null ? "GUEST" : "USER", used, limit);
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCompletion(int status) {
-                    if (status != STATUS_COMMITTED) {
-                        log.debug("Scam check transaction rolled back; releasing quota reservation");
-                        release(key);
-                    }
-                }
-            });
-        }
+        return key;
+    }
+
+    public void releaseReservation(String key) {
+        release(key);
     }
 
     public UserScamCheckQuotaResponse getUserQuota(User user) {

@@ -16,20 +16,21 @@ import com.be.scamshield.repository.ExtractedIocRepository;
 import com.be.scamshield.repository.UserRepository;
 import com.be.scamshield.service.IGuestSessionService;
 import com.be.scamshield.service.IScamCheckService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ScamCheckServiceImpl implements IScamCheckService {
     private static final ZoneId VIETNAM = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -42,12 +43,29 @@ public class ScamCheckServiceImpl implements IScamCheckService {
     private final ScamCheckDecisionService decisions;
     private final ScamCheckQuotaService quotas;
     private final Clock applicationClock;
+    private final TransactionTemplate transactions;
+
+    public ScamCheckServiceImpl(CheckRequestRepository checks, CheckVerdictRepository verdicts,
+                                ExtractedIocRepository extractedIocs, UserRepository users,
+                                IGuestSessionService guestSessions, ScamCheckInputProcessor inputProcessor,
+                                ScamCheckDecisionService decisions, ScamCheckQuotaService quotas,
+                                Clock applicationClock, PlatformTransactionManager transactionManager) {
+        this.checks = checks;
+        this.verdicts = verdicts;
+        this.extractedIocs = extractedIocs;
+        this.users = users;
+        this.guestSessions = guestSessions;
+        this.inputProcessor = inputProcessor;
+        this.decisions = decisions;
+        this.quotas = quotas;
+        this.applicationClock = applicationClock;
+        this.transactions = new TransactionTemplate(transactionManager);
+    }
 
     @Value("${app.scam-check.retention-days:30}")
     private int retentionDays;
 
     @Override
-    @Transactional
     public ScamCheckResponse check(ScamCheckRequest request, Long userId, String guestToken) {
         long started = System.nanoTime();
         log.info("Scam check submission received: ownerType={}", userId == null ? "GUEST" : "USER");
@@ -56,26 +74,46 @@ public class ScamCheckServiceImpl implements IScamCheckService {
         log.debug("Scam check input prepared: inputType={}, candidateCount={}",
                 request.getInputType(), input.candidates().size());
         if (retentionDays < 1) throw new IllegalStateException("Scam-check retention-days must be positive");
-        quotas.reserve(owner.user(), owner.guest());
-        LocalDateTime now = now();
-        CheckRequest check = checks.save(CheckRequest.builder().user(owner.user()).guestSession(owner.guest())
-                .inputType(request.getInputType()).rawInput(request.getContent())
-                .normalizedInput(input.normalized()).maskedInput(input.masked()).inputHash(input.hash())
-                .status("PROCESSING").createdAt(now).retentionExpiresAt(now.plusDays(retentionDays)).build());
+        AtomicReference<String> reservation = new AtomicReference<>();
+        CheckRequest check;
+        try {
+            check = transactions.execute(status -> {
+                reservation.set(quotas.reserve(owner.user(), owner.guest()));
+                LocalDateTime now = now();
+                return checks.save(CheckRequest.builder().user(owner.user()).guestSession(owner.guest())
+                        .inputType(request.getInputType()).rawInput(request.getContent())
+                        .normalizedInput(input.normalized()).maskedInput(input.masked()).inputHash(input.hash())
+                        .status("PROCESSING").createdAt(now).retentionExpiresAt(now.plusDays(retentionDays)).build());
+            });
+        } catch (RuntimeException ex) {
+            releaseReservation(reservation.get());
+            throw ex;
+        }
         log.info("Scam check created: checkId={}, inputType={}, ownerType={}, candidateCount={}",
                 check.getId(), check.getInputType(), userId == null ? "GUEST" : "USER", input.candidates().size());
-        var decision = decisions.decide(check, input.candidates());
-        // Link known catalog indicators; checking unverified text must not populate the curated catalog.
-        for (var indicator : decision.knownIndicators()) {
-            var candidate = input.candidates().stream().filter(c -> c.type().equals(indicator.getType())
-                    && c.aliases().contains(indicator.getNormalizedValue())).findFirst().orElseThrow();
-            extractedIocs.save(ExtractedIoc.builder().checkRequest(check).indicator(indicator)
-                    .extractionMethod("REGEX").startPosition(candidate.start()).endPosition(candidate.end())
-                    .createdAt(now).build());
+        CheckVerdict saved;
+        try {
+            var decision = decisions.decide(check, input.candidates());
+            saved = transactions.execute(status -> {
+                LocalDateTime now = now();
+                CheckRequest managedCheck = checks.findById(check.getId()).orElseThrow(this::notFound);
+                // Link known catalog indicators; checking unverified text must not populate the curated catalog.
+                for (var indicator : decision.knownIndicators()) {
+                    var candidate = input.candidates().stream().filter(c -> c.type().equals(indicator.getType())
+                            && c.aliases().contains(indicator.getNormalizedValue())).findFirst().orElseThrow();
+                    extractedIocs.save(ExtractedIoc.builder().checkRequest(managedCheck).indicator(indicator)
+                            .extractionMethod("REGEX").startPosition(candidate.start()).endPosition(candidate.end())
+                            .createdAt(now).build());
+                }
+                managedCheck.setStatus("COMPLETED");
+                managedCheck.setCompletedAt(now);
+                decision.verdict().setCheckRequest(managedCheck);
+                return verdicts.saveAndFlush(decision.verdict());
+            });
+        } catch (RuntimeException ex) {
+            releaseReservation(reservation.get());
+            throw ex;
         }
-        check.setStatus("COMPLETED");
-        check.setCompletedAt(now());
-        var saved = verdicts.saveAndFlush(decision.verdict());
         log.info("Scam check result persisted: checkId={}, verdictId={}, verdict={}, stage={}, unknownReason={}, elapsedMs={}",
                 check.getId(), saved.getId(), saved.getVerdict(), saved.getDecidedByStage(),
                 saved.getUnknownReason(), (System.nanoTime() - started) / 1_000_000);
@@ -131,6 +169,10 @@ public class ScamCheckServiceImpl implements IScamCheckService {
 
     private LocalDateTime now() {
         return LocalDateTime.now(applicationClock.withZone(VIETNAM));
+    }
+
+    private void releaseReservation(String reservation) {
+        if (reservation != null) quotas.releaseReservation(reservation);
     }
 
     private ResourceNotFoundException notFound() {
