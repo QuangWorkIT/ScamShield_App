@@ -24,6 +24,9 @@ public interface ReportRepository extends JpaRepository<Report, Long>, JpaSpecif
     @EntityGraph(attributePaths = {"indicator", "category", "reporterUser"})
     Optional<Report> findById(Long id);
 
+    @EntityGraph(attributePaths = {"indicator", "category", "reporterUser"})
+    List<Report> findByIndicatorIdAndStatusIgnoreCase(Long indicatorId, String status);
+
     List<Report> findByReporterUserIdOrderByCreatedAtDesc(Long reporterUserId);
     long countByReporterUserId(Long reporterUserId);
     long countByReporterUserIdAndCreatedAtAfter(Long reporterUserId, LocalDateTime createdAt);

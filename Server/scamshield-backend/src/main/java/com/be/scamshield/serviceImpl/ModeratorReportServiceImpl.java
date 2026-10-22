@@ -1,19 +1,18 @@
 package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.constant.ReportPriority;
+import com.be.scamshield.constant.ReportStatus;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.request.ModeratorDecisionRequest;
 import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
 import com.be.scamshield.dto.response.ModeratorEvidenceResponse;
 import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
 import com.be.scamshield.dto.response.ModeratorReportResponse;
-import com.be.scamshield.entity.Indicator;
-import com.be.scamshield.entity.Report;
-import com.be.scamshield.entity.ReportEvidence;
-import com.be.scamshield.entity.ScamCategory;
-import com.be.scamshield.entity.User;
+import com.be.scamshield.entity.*;
+import com.be.scamshield.exception.BadRequestException;
 import com.be.scamshield.exception.ResourceNotFoundException;
-import com.be.scamshield.repository.ReportEvidenceRepository;
-import com.be.scamshield.repository.ReportRepository;
+import com.be.scamshield.repository.*;
+import com.be.scamshield.security.UserPrincipal;
 import com.be.scamshield.service.IModeratorReportService;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
@@ -31,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -44,9 +44,20 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM HH:mm");
     private static final Pattern CASE_CODE_PATTERN = Pattern.compile("(?i)CS-\\d{4}-(\\d+)");
+    private static final Set<String> DECIDABLE_STATUSES = Set.of(
+            ReportStatus.PENDING.name(),
+            ReportStatus.IN_REVIEW.name()
+    );
 
     private final ReportRepository reportRepository;
     private final ReportEvidenceRepository reportEvidenceRepository;
+    private final UserRepository userRepository;
+    private final ModerationActionRepository moderationActionRepository;
+    private final AuditLogRepository auditLogRepository;
+    private final ConfirmedIndicatorRepository confirmedIndicatorRepository;
+    private final NotificationRepository notificationRepository;
+    private final ScamCategorieRepository scamCategorieRepository;
+    private final ReputationTransactionRepository reputationTransactionRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -123,6 +134,192 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
         return mapToModeratorReportResponse(report, evidences);
     }
 
+    @Override
+    @Transactional
+    public ModeratorReportResponse makeDecision(
+            Long reportId,
+            UserPrincipal currentUser,
+            ModeratorDecisionRequest request) {
+
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hồ sơ báo cáo với ID: " + reportId));
+
+        String previousStatus = report.getStatus();
+        if (Boolean.TRUE.equals(report.getModerationLocked()) || "LOCKED".equalsIgnoreCase(previousStatus)) {
+            throw new BadRequestException("Hồ sơ báo cáo đang bị khóa kiểm duyệt, không thể xử lý");
+        }
+
+        if (previousStatus == null || !DECIDABLE_STATUSES.contains(previousStatus.toUpperCase())) {
+            if ("APPROVED".equalsIgnoreCase(previousStatus) || "REJECTED".equalsIgnoreCase(previousStatus)) {
+                throw new BadRequestException("Hồ sơ báo cáo này đã có quyết định xử lý trước đó (" + previousStatus + ")");
+            }
+            throw new BadRequestException("Không thể xử lý hồ sơ ở trạng thái hiện tại (" + previousStatus + ")");
+        }
+
+        User moderatorUser = resolveModeratorUser(currentUser);
+        LocalDateTime now = LocalDateTime.now();
+
+        String newReportStatus = switch (request.getDecision()) {
+            case APPROVE -> "APPROVED";
+            case REJECT -> "REJECTED";
+        };
+
+        // Determine optional matched ScamCategory from categoryId
+        ScamCategory matchedCategory = null;
+        if (request.getCategoryId() != null) {
+            matchedCategory = scamCategorieRepository.findById(request.getCategoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy danh mục lừa đảo với ID: " + request.getCategoryId()));
+        }
+
+        // Find all reports of this Indicator currently in eligible decidable statuses (PENDING, IN_REVIEW) to process in bulk
+        List<Report> reportsToProcess = new ArrayList<>();
+        reportsToProcess.add(report);
+
+        if (report.getIndicator() != null) {
+            for (String decidableStatus : DECIDABLE_STATUSES) {
+                List<Report> siblingReports = reportRepository.findByIndicatorIdAndStatusIgnoreCase(
+                        report.getIndicator().getId(), decidableStatus);
+                for (Report siblingReport : siblingReports) {
+                    if (!siblingReport.getId().equals(report.getId())
+                            && !Boolean.TRUE.equals(siblingReport.getModerationLocked())
+                            && !"LOCKED".equalsIgnoreCase(siblingReport.getStatus())) {
+                        reportsToProcess.add(siblingReport);
+                    }
+                }
+            }
+        }
+
+        // Process all affected reports
+        for (Report r : reportsToProcess) {
+            String prevStatus = r.getStatus();
+            r.setStatus(newReportStatus);
+            r.setModerationLocked(false);
+            r.setLockedByUser(null);
+            r.setLockedAt(null);
+            r.setUpdatedAt(now);
+
+            if (matchedCategory != null) {
+                r.setCategory(matchedCategory);
+            }
+
+            reportRepository.save(r);
+
+            // Save ModerationAction
+            ModerationAction action = ModerationAction.builder()
+                    .report(r)
+                    .moderatorUser(moderatorUser)
+                    .action(request.getDecision().name())
+                    .reason(request.getReason())
+                    .previousStatus(prevStatus)
+                    .newStatus(newReportStatus)
+                    .createdAt(now)
+                    .build();
+            moderationActionRepository.save(action);
+
+            // Save AuditLog
+            AuditLog auditLog = AuditLog.builder()
+                    .actorUser(moderatorUser)
+                    .action("MODERATION_" + request.getDecision().name())
+                    .entityType("REPORT")
+                    .entityId(r.getId())
+                    .previousValue(prevStatus)
+                    .newValue(newReportStatus)
+                    .reason(request.getReason())
+                    .createdAt(now)
+                    .build();
+            auditLogRepository.save(auditLog);
+
+            // Reporter rewards and notifications
+            if (r.getReporterUser() != null) {
+                User reporter = r.getReporterUser();
+                String targetVal = r.getIndicator() != null ? r.getIndicator().getDisplayValue() : ("#RPT-" + r.getId());
+
+                if (request.getDecision() == ModeratorDecisionRequest.DecisionType.APPROVE) {
+                    // Reward reputation points (+30 points)
+                    int bonusPoints = 30;
+                    int currentPoints = reporter.getReputationPoints() != null ? reporter.getReputationPoints() : 0;
+                    reporter.setReputationPoints(currentPoints + bonusPoints);
+                    userRepository.save(reporter);
+
+                    ReputationTransaction tx = ReputationTransaction.builder()
+                            .user(reporter)
+                            .pointsDelta(bonusPoints)
+                            .reasonCode("REPORT_APPROVED")
+                            .referenceType("REPORT")
+                            .referenceId(r.getId())
+                            .createdAt(now)
+                            .build();
+                    reputationTransactionRepository.save(tx);
+
+                    // Send approval notification
+                    Notification notification = Notification.builder()
+                            .user(reporter)
+                            .type("REPORT_VERDICT")
+                            .title("Báo cáo đã được phê duyệt")
+                            .message("Báo cáo của bạn về " + targetVal + " đã được xác thực và đưa vào danh sách cảnh báo.")
+                            .referenceType("REPORT")
+                            .referenceId(r.getId())
+                            .isRead(false)
+                            .createdAt(now)
+                            .build();
+                    notificationRepository.save(notification);
+                } else {
+                    // Send rejection notification
+                    Notification notification = Notification.builder()
+                            .user(reporter)
+                            .type("REPORT_VERDICT")
+                            .title("Báo cáo đã bị từ chối")
+                            .message("Báo cáo của bạn về " + targetVal + " chưa đủ căn cứ xác thực và đã bị từ chối.")
+                            .referenceType("REPORT")
+                            .referenceId(r.getId())
+                            .isRead(false)
+                            .createdAt(now)
+                            .build();
+                    notificationRepository.save(notification);
+                }
+            }
+        }
+
+        // If APPROVE: Add/Reactivate ConfirmedIndicator (Blacklist) for the indicator
+        if (request.getDecision() == ModeratorDecisionRequest.DecisionType.APPROVE && report.getIndicator() != null) {
+            Optional<ConfirmedIndicator> existingConfirmedOpt = confirmedIndicatorRepository.findByIndicatorId(report.getIndicator().getId());
+            if (existingConfirmedOpt.isPresent()) {
+                ConfirmedIndicator existing = existingConfirmedOpt.get();
+                existing.setStatus("ACTIVE");
+                existing.setRetractedAt(null);
+                existing.setRetractionReason(null);
+                existing.setConfirmedAt(now);
+                existing.setConfirmedByUser(moderatorUser);
+                existing.setSourceReport(report);
+                existing.setCategory(report.getCategory());
+                existing.setPublicReason(request.getReason());
+                confirmedIndicatorRepository.save(existing);
+            } else {
+                ConfirmedIndicator newConfirmed = ConfirmedIndicator.builder()
+                        .indicator(report.getIndicator())
+                        .category(report.getCategory())
+                        .status("ACTIVE")
+                        .confirmedByUser(moderatorUser)
+                        .sourceReport(report)
+                        .confirmedAt(now)
+                        .publicReason(request.getReason())
+                        .build();
+                confirmedIndicatorRepository.save(newConfirmed);
+            }
+        }
+
+        List<ReportEvidence> evidences = reportEvidenceRepository.findByReportId(reportId);
+        return mapToModeratorReportResponse(report, evidences);
+    }
+
+    private User resolveModeratorUser(UserPrincipal currentUser) {
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new BadRequestException("Thông tin định danh kiểm duyệt viên không hợp lệ");
+        }
+        return userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin tài khoản kiểm duyệt viên với ID: " + currentUser.getId()));
+    }
+
     private Specification<Report> createFilterSpecification(ModeratorReportFilterRequest filter) {
         String tab = filter.getTab();
         String search = filter.getSearch();
@@ -167,28 +364,29 @@ public class ModeratorReportServiceImpl implements IModeratorReportService {
 
             // 3. Search query filtering
             if (StringUtils.hasText(search)) {
-                String trimmed = search.trim();
-                String searchPattern = "%" + trimmed.toLowerCase() + "%";
-                List<Predicate> searchPredicates = new ArrayList<>();
-
-                Long parsedId = parseSearchId(trimmed);
-                if (parsedId != null) {
-                    searchPredicates.add(cb.equal(root.get("id"), parsedId));
-                }
+                String searchTrim = search.trim();
+                String searchLike = "%" + searchTrim.toLowerCase() + "%";
 
                 Join<Report, Indicator> indicatorJoin = root.join("indicator", JoinType.LEFT);
-                searchPredicates.add(cb.like(cb.lower(indicatorJoin.get("displayValue")), searchPattern));
-                searchPredicates.add(cb.like(cb.lower(indicatorJoin.get("normalizedValue")), searchPattern));
-
                 Join<Report, ScamCategory> categoryJoin = root.join("category", JoinType.LEFT);
-                searchPredicates.add(cb.like(cb.lower(categoryJoin.get("name")), searchPattern));
-
                 Join<Report, User> userJoin = root.join("reporterUser", JoinType.LEFT);
-                searchPredicates.add(cb.like(cb.lower(userJoin.get("fullName")), searchPattern));
-                searchPredicates.add(cb.like(cb.lower(userJoin.get("email")), searchPattern));
 
-                searchPredicates.add(cb.like(cb.lower(root.get("reportedMessage")), searchPattern));
-                searchPredicates.add(cb.like(cb.lower(root.get("description")), searchPattern));
+                List<Predicate> searchPredicates = new ArrayList<>();
+
+                Long searchId = parseSearchId(searchTrim);
+                if (searchId != null) {
+                    searchPredicates.add(cb.equal(root.get("id"), searchId));
+                }
+
+                searchPredicates.add(cb.like(cb.lower(indicatorJoin.get("normalizedValue")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(indicatorJoin.get("displayValue")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(categoryJoin.get("name")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(categoryJoin.get("code")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(userJoin.get("fullName")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(userJoin.get("email")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(userJoin.get("phoneNumber")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(root.get("reportedMessage")), searchLike));
+                searchPredicates.add(cb.like(cb.lower(root.get("description")), searchLike));
 
                 predicates.add(cb.or(searchPredicates.toArray(new Predicate[0])));
             }

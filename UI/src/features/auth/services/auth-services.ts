@@ -3,6 +3,7 @@ import { decodeJwt } from "@/lib/utils/jwtUtil";
 import { useAuthStore } from "@/store/auth.store";
 import { User, UserRole } from "@/types/user";
 import axios from "axios";
+import { RegisterGoogleRequest } from "@/features/auth/types/auth.types";
 
 export interface RefreshTokenResult {
     accessToken: string;
@@ -204,6 +205,61 @@ export const authServices = {
             return response.data
         } catch (error) {
             throw new Error(extractErrorMessage(error, "Đăng ký đối tác thất bại."))
+        }
+    },
+    loginGoogle: async function (idToken: string) {
+        try {
+            const response = await publicApi.post("/auth/login/google", {
+                idToken: idToken.trim(),
+            })
+            const data = response.data
+            const accessToken = data?.data?.accessToken || data?.accessToken
+            if (!accessToken) {
+                throw new Error("Không nhận được access token từ máy chủ")
+            }
+            useAuthStore.getState().setToken(accessToken)
+            const decoded = decodeJwt(accessToken)
+            return {
+                role: (decoded?.role || ""),
+                message: data?.message || "Đăng nhập Google thành công",
+            }
+        } catch (error: unknown) {
+            if (axios.isAxiosError(error)) {
+                const status = error.response?.status
+                const msg = error.response?.data?.message || error.response?.data?.error
+                if (status === 404) {
+                    throw new Error(msg || "Tài khoản Google này chưa được đăng ký trong hệ thống. Vui lòng đăng ký trước.")
+                }
+                if (status === 401 || status === 403) {
+                    throw new Error(msg || "Tài khoản bị tạm khóa hoặc không có quyền truy cập.")
+                }
+                if (msg) {
+                    throw new Error(msg)
+                }
+            }
+            throw new Error(error instanceof Error ? error.message : "Đăng nhập Google thất bại.")
+        }
+    },
+    registerGoogle: async function (payload: RegisterGoogleRequest) {
+        try {
+            const response = await publicApi.post("/auth/register/google", payload)
+            const data = response.data
+            const accessToken = data?.data?.accessToken || data?.accessToken
+            if (accessToken) {
+                useAuthStore.getState().setToken(accessToken)
+            }
+            return {
+                message: data?.message || "Đăng ký tài khoản qua Google thành công",
+                accessToken,
+            }
+        } catch (error: unknown) {
+            if (axios.isAxiosError(error)) {
+                const msg = error.response?.data?.message || error.response?.data?.error
+                if (msg) {
+                    throw new Error(msg)
+                }
+            }
+            throw new Error(error instanceof Error ? error.message : "Đăng ký tài khoản qua Google thất bại.")
         }
     },
 }

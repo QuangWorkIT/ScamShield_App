@@ -2,9 +2,11 @@ package com.be.scamshield.controller;
 
 import com.be.scamshield.dto.BaseResponse;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.request.ModeratorDecisionRequest;
 import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
 import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
 import com.be.scamshield.dto.response.ModeratorReportResponse;
+import com.be.scamshield.security.UserPrincipal;
 import com.be.scamshield.service.IModeratorReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,11 +21,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Set;
@@ -75,6 +74,19 @@ public class ModeratorReportController {
             @PathVariable Long id) {
         ModeratorReportResponse report = moderatorReportService.getReportById(id);
         return ResponseEntity.ok(new BaseResponse<>(true, "Lấy chi tiết hồ sơ báo cáo thành công", report));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Kiểm duyệt viên ra quyết định thẩm định ca báo cáo",
+            description = "Phê duyệt (APPROVE) hoặc từ chối (REJECT). Khi ra quyết định, tất cả các báo cáo PENDING của cùng một đối tượng (Indicator) sẽ được xử lý đồng bộ cùng lúc. Yêu cầu lý do tối thiểu 20 ký tự để lưu vết audit trail bất biến.")
+    public ResponseEntity<BaseResponse<ModeratorReportResponse>> submitDecision(
+            @Parameter(description = "ID gốc của hồ sơ báo cáo (ví dụ: 1891)")
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @Valid @RequestBody ModeratorDecisionRequest request) {
+
+        ModeratorReportResponse response = moderatorReportService.makeDecision(id, currentUser, request);
+        return ResponseEntity.ok(new BaseResponse<>(true, "Xác nhận quyết định kiểm duyệt thành công", response));
     }
 
     private Pageable createPageable(ModeratorReportFilterRequest filter) {

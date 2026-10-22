@@ -3,6 +3,7 @@ package com.be.scamshield.controller;
 import com.be.scamshield.config.SecurityConfig;
 import com.be.scamshield.constant.ReportPriority;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.request.ModeratorDecisionRequest;
 import com.be.scamshield.dto.request.ModeratorReportFilterRequest;
 import com.be.scamshield.dto.response.ModeratorEvidenceResponse;
 import com.be.scamshield.dto.response.ModeratorQueueCountsResponse;
@@ -14,12 +15,14 @@ import com.be.scamshield.security.JwtAuthenticationEntryPoint;
 import com.be.scamshield.security.JwtTokenProvider;
 import com.be.scamshield.security.UserPrincipal;
 import com.be.scamshield.service.IModeratorReportService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,6 +36,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ModeratorReportController.class)
@@ -53,6 +57,8 @@ class ModeratorReportControllerTest {
     @Autowired
     private MockMvc mvc;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private UsernamePasswordAuthenticationToken moderatorAuth;
     private UsernamePasswordAuthenticationToken userAuth;
 
@@ -69,14 +75,14 @@ class ModeratorReportControllerTest {
                 .build();
         moderatorAuth = new UsernamePasswordAuthenticationToken(modPrincipal, null, modPrincipal.getAuthorities());
 
-        UserPrincipal regularUser = UserPrincipal.builder()
+        UserPrincipal userPrincipal = UserPrincipal.builder()
                 .id(2L)
                 .username("user@example.com")
                 .email("user@example.com")
                 .role("REGISTERED_USER")
                 .authorities(List.of(new SimpleGrantedAuthority("ROLE_REGISTERED_USER")))
                 .build();
-        userAuth = new UsernamePasswordAuthenticationToken(regularUser, null, regularUser.getAuthorities());
+        userAuth = new UsernamePasswordAuthenticationToken(userPrincipal, null, userPrincipal.getAuthorities());
 
         mockReportResponse = ModeratorReportResponse.builder()
                 .id("CS-2024-1891")
@@ -243,6 +249,109 @@ class ModeratorReportControllerTest {
     @Test
     void getReportById_WhenUnauthenticated_ReturnsUnauthorized() throws Exception {
         mvc.perform(get(BASE_URL + "/1891"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void submitDecision_WhenValid_ReturnsSuccess() throws Exception {
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Bằng chứng đã được xác minh đối soát đầy đủ và hoàn toàn chính xác")
+                .categoryId(1L)
+                .build();
+
+        ModeratorReportResponse approvedResponse = ModeratorReportResponse.builder()
+                .id("CS-2024-1891")
+                .rawId(1891L)
+                .status("Approved")
+                .build();
+
+        when(moderatorReportService.makeDecision(eq(1891L), any(), any(ModeratorDecisionRequest.class)))
+                .thenReturn(approvedResponse);
+
+        mvc.perform(put(BASE_URL + "/1891")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.status").value("Approved"));
+    }
+
+    @Test
+    void submitDecision_WhenReject_ReturnsSuccess() throws Exception {
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.REJECT)
+                .reason("Bằng chứng thiếu tính thuyết phục và không có căn cứ xác thực rõ ràng")
+                .build();
+
+        ModeratorReportResponse rejectedResponse = ModeratorReportResponse.builder()
+                .id("CS-2024-1891")
+                .rawId(1891L)
+                .status("Rejected")
+                .build();
+
+        when(moderatorReportService.makeDecision(eq(1891L), any(), any(ModeratorDecisionRequest.class)))
+                .thenReturn(rejectedResponse);
+
+        mvc.perform(put(BASE_URL + "/1891")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.status").value("Rejected"));
+    }
+
+    @Test
+    void submitDecision_WhenReasonTooShort_ReturnsBadRequest() throws Exception {
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Quá ngắn")
+                .build();
+
+        mvc.perform(put(BASE_URL + "/1891")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void submitDecision_WhenDecisionNull_ReturnsBadRequest() throws Exception {
+        String invalidJson = "{\"reason\": \"Bằng chứng đã được xác minh đối soát đầy đủ và hoàn toàn chính xác\"}";
+
+        mvc.perform(put(BASE_URL + "/1891")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidJson)
+                        .with(authentication(moderatorAuth)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void submitDecision_WhenRegularUser_ReturnsForbidden() throws Exception {
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Bằng chứng đã được xác minh đối soát đầy đủ và hoàn toàn chính xác")
+                .build();
+
+        mvc.perform(put(BASE_URL + "/1891")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(authentication(userAuth)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void submitDecision_WhenUnauthenticated_ReturnsUnauthorized() throws Exception {
+        ModeratorDecisionRequest request = ModeratorDecisionRequest.builder()
+                .decision(ModeratorDecisionRequest.DecisionType.APPROVE)
+                .reason("Bằng chứng đã được xác minh đối soát đầy đủ và hoàn toàn chính xác")
+                .build();
+
+        mvc.perform(put(BASE_URL + "/1891")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());
     }
 }
