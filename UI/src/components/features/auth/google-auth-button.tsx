@@ -56,6 +56,7 @@ export function GoogleAuthButton({
 }: GoogleAuthButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isGisReady, setIsGisReady] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
   const clientId = getGoogleClientId()
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export function GoogleAuthButton({
           cancel_on_tap_outside: true,
         })
 
-        // Clear container before rendering
+        // Render Google GIS button into our container
         if (containerRef.current) {
           containerRef.current.innerHTML = ""
           window.google.accounts.id.renderButton(containerRef.current, {
@@ -93,7 +94,7 @@ export function GoogleAuthButton({
             text,
             shape: "rectangular",
             logo_alignment: "left",
-            width: 380,
+            width: 400,
             locale: "vi",
           })
           setIsGisReady(true)
@@ -119,15 +120,9 @@ export function GoogleAuthButton({
       return
     }
 
-    // If GIS button is mounted, try finding its internal iframe/button or prompt One Tap
     if (window.google?.accounts?.id) {
       try {
-        window.google.accounts.id.prompt((notification: unknown) => {
-          const n = notification as { isNotDisplayed?: () => boolean; isSkippedMoment?: () => boolean }
-          if (n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) {
-            toast.info("Vui lòng nhấp trực tiếp vào nút Đăng nhập Google để mở cửa sổ OAuth 2.0.")
-          }
-        })
+        window.google.accounts.id.prompt()
       } catch {
         toast.info("Đang kết nối Google OAuth 2.0...")
       }
@@ -137,38 +132,53 @@ export function GoogleAuthButton({
   const defaultLabel = text === "signup_with" ? "Đăng ký bằng Google" : "Đăng nhập với Google"
 
   return (
-    <div className={cn("relative flex w-full justify-center min-h-[48px]", className)}>
-      {/* Container where Google GIS renders its official OAuth 2.0 button */}
+    <div
+      className={cn("relative w-full cursor-pointer select-none", className)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{ cursor: "pointer" }}
+    >
+      {/* 1. Custom Button matching the exact Google Outline Pill Style in user's image */}
+      <div
+        className={cn(
+          "flex h-12 w-full items-center justify-center gap-3 rounded-xl border",
+          "border-[#747775] bg-white text-[#1f1f1f] shadow-sm",
+          "transition-all duration-200 cursor-pointer select-none",
+          isHovered
+            ? "bg-[#F8FAFD] border-[#1f1f1f] shadow-md"
+            : "bg-white border-[#747775]",
+          "active:scale-[0.99]",
+          (disabled || isLoading) && "pointer-events-none opacity-70",
+          "dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted/80"
+        )}
+        style={{ cursor: "pointer" }}
+      >
+        {isLoading ? (
+          <span className="size-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 dark:border-slate-600 dark:border-t-white" />
+        ) : (
+          <GoogleIcon className="size-5 shrink-0" />
+        )}
+        <span
+          className="text-[15px] font-semibold tracking-normal text-[#1f1f1f] dark:text-foreground cursor-pointer select-none"
+          style={{ cursor: "pointer" }}
+        >
+          {isLoading ? "Đang kết nối..." : (label || defaultLabel)}
+        </span>
+      </div>
+
+      {/* 2. Invisible Google GIS Container overlaying on top to reliably capture clicks */}
       <div
         ref={containerRef}
+        onClick={handleFallbackClick}
         className={cn(
-          "w-full flex justify-center [&>div]:w-full [&>div>iframe]:!w-full [&>div]:!max-w-none",
-          !isGisReady && "hidden"
+          "absolute inset-0 z-20 h-full w-full cursor-pointer overflow-hidden",
+          "opacity-0 hover:opacity-[0.0001]",
+          "[&>div]:!h-full [&>div]:!w-full [&>div]:!cursor-pointer",
+          "[&>div>iframe]:!h-full [&>div>iframe]:!w-full [&>div>iframe]:!cursor-pointer",
+          (disabled || isLoading) && "pointer-events-none"
         )}
+        style={{ cursor: "pointer" }}
       />
-
-      {/* Fallback Custom UI if GIS button is not ready or not yet configured */}
-      {!isGisReady && (
-        <button
-          type="button"
-          onClick={handleFallbackClick}
-          disabled={disabled || isLoading}
-          className={cn(
-            "flex h-12 w-full items-center justify-center gap-3 rounded-xl",
-            "border border-[#C6C6CE] bg-white text-sm font-bold text-[#131B2E] shadow-sm",
-            "transition-all duration-200 hover:bg-[#F2F3FF] active:scale-[0.99]",
-            "disabled:opacity-70 disabled:pointer-events-none",
-            "dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted"
-          )}
-        >
-          {isLoading ? (
-            <span className="size-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 dark:border-slate-600 dark:border-t-white" />
-          ) : (
-            <GoogleIcon className="size-5 shrink-0" />
-          )}
-          <span>{isLoading ? "Đang kết nối..." : (label || defaultLabel)}</span>
-        </button>
-      )}
     </div>
   )
 }
