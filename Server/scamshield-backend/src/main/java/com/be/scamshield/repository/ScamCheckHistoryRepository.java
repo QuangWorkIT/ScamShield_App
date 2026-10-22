@@ -34,7 +34,7 @@ public class ScamCheckHistoryRepository {
             String partnerBrand,
             String verdictStatus,
             String verdictLabel,
-            int riskScore,
+            Integer riskScore,
             boolean isRetroactive
     ) {}
 
@@ -48,11 +48,14 @@ public class ScamCheckHistoryRepository {
                     cr.normalized_input,
                     cr.masked_input,
                     cr.input_hash,
-                    i.type AS indicator_type,
-                    i.normalized_value AS indicator_value,
-                    i.display_value AS indicator_display,
-                    COALESCE(sc_ci.name, sc_r.name, pp.brand_name) AS category_name,
-                    COALESCE(sc_ci.code, sc_r.code) AS category_code,
+                    COALESCE(matched_i.type, i.type) AS indicator_type,
+                    COALESCE(matched_i.normalized_value, i.normalized_value) AS indicator_value,
+                    COALESCE(matched_i.display_value, i.display_value) AS indicator_display,
+                    CASE WHEN cv.id IS NOT NULL THEN sc_v.name
+                         ELSE COALESCE(sc_ci.name, sc_r.name, pp.brand_name) END AS category_name,
+                    CASE WHEN cv.id IS NOT NULL THEN sc_v.code
+                         ELSE COALESCE(sc_ci.code, sc_r.code) END AS category_code,
+                    cv.verdict AS saved_verdict,
                     pp.brand_name AS partner_brand,
                     ci.confirmed_at AS confirmed_at,
                     we.id AS whitelist_id,
@@ -61,10 +64,14 @@ public class ScamCheckHistoryRepository {
                     ROW_NUMBER() OVER (
                         PARTITION BY cr.id 
                         ORDER BY 
-                            CASE WHEN ci.id IS NOT NULL THEN 1 WHEN we.id IS NOT NULL THEN 2 WHEN r.id IS NOT NULL THEN 3 ELSE 4 END,
+                            CASE WHEN cv.matched_indicator_id = i.id THEN 0
+                                 WHEN ci.id IS NOT NULL THEN 1 WHEN we.id IS NOT NULL THEN 2 WHEN r.id IS NOT NULL THEN 3 ELSE 4 END,
                             ei.id ASC
                     ) AS rn
                 FROM check_requests cr
+                LEFT JOIN check_verdicts cv ON cv.check_request_id = cr.id
+                LEFT JOIN indicators matched_i ON matched_i.id = cv.matched_indicator_id
+                LEFT JOIN scam_categories sc_v ON sc_v.id = cv.primary_category_id
                 LEFT JOIN extracted_iocs ei ON ei.check_request_id = cr.id
                 LEFT JOIN indicators i ON i.id = ei.indicator_id
                 LEFT JOIN whitelist_entries we ON we.indicator_id = i.id AND we.verification_status = 'VERIFIED'
@@ -75,6 +82,7 @@ public class ScamCheckHistoryRepository {
                 LEFT JOIN scam_categories sc_r ON sc_r.id = r.category_id
                 WHERE cr.user_id = :userId 
                   AND (cr.status IS NULL OR cr.status <> 'DELETED')
+                  AND (cr.retention_expires_at IS NULL OR cr.retention_expires_at > CURRENT_TIMESTAMP)
             ),
             deduped_checks AS (
                 SELECT 
@@ -93,24 +101,31 @@ public class ScamCheckHistoryRepository {
                     partner_brand,
                     confirmed_at,
                     CASE
+                        WHEN saved_verdict = 'SCAM_RISK' THEN 'DANGEROUS'
+                        WHEN saved_verdict = 'LOW_RISK' THEN 'SAFE'
+                        WHEN saved_verdict IS NOT NULL THEN 'UNKNOWN'
                         WHEN whitelist_id IS NOT NULL THEN 'SAFE'
                         WHEN confirmed_id IS NOT NULL THEN 'DANGEROUS'
                         WHEN report_id IS NOT NULL THEN 'SUSPICIOUS'
                         ELSE 'UNKNOWN'
                     END AS verdict_status,
                     CASE
+                        WHEN saved_verdict = 'SCAM_RISK' THEN 'Lừa Đảo Nguy Cơ Cao'
+                        WHEN saved_verdict = 'LOW_RISK' THEN 'Rủi Ro Thấp'
+                        WHEN saved_verdict IS NOT NULL THEN 'Chưa Đủ Dữ Liệu'
                         WHEN whitelist_id IS NOT NULL THEN 'An Toàn Chính Hãng'
                         WHEN confirmed_id IS NOT NULL THEN 'Lừa Đảo Nguy Cơ Cao'
                         WHEN report_id IS NOT NULL THEN 'Nghi Vấn Rủi Ro'
                         ELSE 'Chưa Đủ Dữ Liệu'
                     END AS verdict_label,
                     CASE
+                        WHEN saved_verdict IS NOT NULL THEN NULL
                         WHEN whitelist_id IS NOT NULL THEN 3
                         WHEN confirmed_id IS NOT NULL THEN 98
                         WHEN report_id IS NOT NULL THEN 68
                         ELSE 15
                     END AS risk_score,
-                    (confirmed_id IS NOT NULL AND confirmed_at > created_at) AS is_retroactive
+                    (saved_verdict IS NULL AND confirmed_id IS NOT NULL AND confirmed_at > created_at) AS is_retroactive
                 FROM ranked_checks
                 WHERE rn = 1
             )
@@ -251,7 +266,7 @@ public class ScamCheckHistoryRepository {
                 rs.getString("partner_brand"),
                 rs.getString("verdict_status"),
                 rs.getString("verdict_label"),
-                rs.getInt("risk_score"),
+                rs.getObject("risk_score", Integer.class),
                 rs.getBoolean("is_retroactive")
         );
     }

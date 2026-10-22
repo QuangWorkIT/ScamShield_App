@@ -19,6 +19,10 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
 
 app:
+  scam-check:
+    ai:
+      enabled: false
+    retention-cleanup-enabled: false
   jwt:
     secret: test-secret-test-secret-test-secret-test-secret-0123456789
     expiration-ms: 3600000

@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 @Repository
 public interface CheckRequestRepository extends JpaRepository<CheckRequest, Long>, JpaSpecificationExecutor<CheckRequest> {
@@ -19,4 +20,14 @@ public interface CheckRequestRepository extends JpaRepository<CheckRequest, Long
     @Modifying
     @Query("UPDATE CheckRequest c SET c.status = 'DELETED' WHERE c.user.id = :userId AND c.id IN :ids")
     int softDeleteByIds(@Param("userId") Long userId, @Param("ids") List<Long> ids);
+
+    @Modifying
+    @Query("""
+            UPDATE CheckRequest c SET c.rawInput = NULL, c.normalizedInput = NULL,
+                c.maskedInput = NULL, c.inputHash = NULL
+            WHERE c.retentionExpiresAt <= :now
+              AND (c.rawInput IS NOT NULL OR c.normalizedInput IS NOT NULL
+                   OR c.maskedInput IS NOT NULL OR c.inputHash IS NOT NULL)
+            """)
+    int redactExpiredInputs(@Param("now") LocalDateTime now);
 }
