@@ -2,6 +2,7 @@ package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.dto.request.ScamCheckRequest;
 import com.be.scamshield.dto.response.ScamCheckResponse;
+import com.be.scamshield.dto.response.UserScamCheckQuotaResponse;
 import com.be.scamshield.entity.CheckRequest;
 import com.be.scamshield.entity.CheckVerdict;
 import com.be.scamshield.entity.ExtractedIoc;
@@ -96,6 +97,13 @@ public class ScamCheckServiceImpl implements IScamCheckService {
             throw notFound();
         }
         return response(verdicts.findByCheckRequestId(checkId).orElseThrow(this::notFound));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserScamCheckQuotaResponse getUserQuota(Long userId) {
+        if (userId == null) throw new UnauthorizedException("Vui lòng đăng nhập để xem hạn mức");
+        return quotas.getUserQuota(owner(userId, null).user());
     }
 
     private Owner owner(Long userId, String guestToken) {

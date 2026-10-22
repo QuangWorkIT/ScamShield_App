@@ -3,6 +3,7 @@ package com.be.scamshield.serviceImpl;
 import com.be.scamshield.entity.GuestSession;
 import com.be.scamshield.entity.QuotaPolicy;
 import com.be.scamshield.entity.User;
+import com.be.scamshield.dto.response.UserScamCheckQuotaResponse;
 import com.be.scamshield.repository.QuotaPolicyRepository;
 import com.be.scamshield.service.IQuotaCounterService;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +69,24 @@ public class ScamCheckQuotaService {
                 }
             });
         }
+    }
+
+    public UserScamCheckQuotaResponse getUserQuota(User user) {
+        ZonedDateTime now = ZonedDateTime.now(applicationClock.withZone(VIETNAM));
+        int limit = Math.max(0, dailyLimit(user));
+        long count;
+        try {
+            count = counters.get("quota:user:" + user.getId() + ":" + now.toLocalDate());
+        } catch (RuntimeException ex) {
+            log.error("Unable to read a user's scam-check quota", ex);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Chưa thể kiểm tra hạn mức. Vui lòng thử lại sau.");
+        }
+        int used = (int) Math.max(0, Math.min(count, Integer.MAX_VALUE));
+        return new UserScamCheckQuotaResponse(user.getId(), user.getFullName(),
+                user.getReputationRank() == null ? null : user.getReputationRank().getName(),
+                limit, used, Math.max(0, limit - used),
+                now.toLocalDate().plusDays(1).atStartOfDay());
     }
 
     private int dailyLimit(User user) {

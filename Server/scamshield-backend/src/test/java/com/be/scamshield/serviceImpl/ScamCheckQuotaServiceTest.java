@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -84,6 +85,38 @@ class ScamCheckQuotaServiceTest {
 
     private QuotaPolicy policy(int limit) {
         return QuotaPolicy.builder().maxChecksPerDay(limit).build();
+    }
+
+    @Test
+    void registeredQuotaReadsTheSameCounterAndPolicyAsScanReservations() {
+        User user = User.builder().id(7L).fullName("Nguyễn An")
+                .reputationRank(ReputationRank.builder().id(2L).name("Hiệp Sĩ").build()).build();
+        when(policies.findByRankId(2L)).thenReturn(Optional.of(policy(50)));
+        service.reserve(user, null);
+
+        var quota = service.getUserQuota(user);
+
+        assertThat(quota.userId()).isEqualTo(7L);
+        assertThat(quota.fullName()).isEqualTo("Nguyễn An");
+        assertThat(quota.rankName()).isEqualTo("Hiệp Sĩ");
+        assertThat(quota.limit()).isEqualTo(50);
+        assertThat(quota.used()).isEqualTo(1);
+        assertThat(quota.remaining()).isEqualTo(49);
+        assertThat(quota.resetsAt()).isEqualTo(LocalDateTime.of(2026, 10, 22, 0, 0));
+    }
+
+    @Test
+    void registeredQuotaUsesRegisteredPolicyWhenNoRankPolicyExists() {
+        User user = User.builder().id(7L).build();
+        when(policies.findByNameIgnoreCase("REGISTERED_USER")).thenReturn(Optional.of(policy(3)));
+        counters.set("quota:user:7:2026-10-21", 3, Duration.ofHours(1));
+
+        var quota = service.getUserQuota(user);
+
+        assertThat(quota.limit()).isEqualTo(3);
+        assertThat(quota.used()).isEqualTo(3);
+        assertThat(quota.remaining()).isZero();
+        assertThat(quota.rankName()).isNull();
     }
 
     @Test

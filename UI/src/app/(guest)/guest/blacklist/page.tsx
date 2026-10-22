@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { Suspense, useState, useMemo, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import axios from "axios"
 import {
@@ -172,8 +173,42 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
 }
 
 export default function GuestBlacklistPage() {
-  const [activeTab, setActiveTab] = useState<TabType>("blacklist")
-  const [searchQuery, setSearchQuery] = useState("")
+  return (
+    <Suspense
+      fallback={
+        <p role="status" className="p-6 text-sm text-muted-foreground">
+          Đang tải tài nguyên…
+        </p>
+      }
+    >
+      <GuestBlacklistSearch />
+    </Suspense>
+  )
+}
+
+function GuestBlacklistSearch() {
+  const searchParams = useSearchParams()
+  const search = searchParams.get("search") || ""
+  const tab: TabType =
+    searchParams.get("tab") === "whitelist" ? "whitelist" : "blacklist"
+  return (
+    <GuestBlacklistContent
+      key={JSON.stringify([tab, search])}
+      initialSearch={search}
+      initialTab={tab}
+    />
+  )
+}
+
+function GuestBlacklistContent({
+  initialSearch,
+  initialTab,
+}: {
+  initialSearch: string
+  initialTab: TabType
+}) {
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab)
+  const [searchQuery, setSearchQuery] = useState(initialSearch)
   const [selectedCategory, setSelectedCategory] =
     useState<CategoryFilter>("all")
   const [sortOrder, setSortOrder] = useState<SortOrder>("newest")
