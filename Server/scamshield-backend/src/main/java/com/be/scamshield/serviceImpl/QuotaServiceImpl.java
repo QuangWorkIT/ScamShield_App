@@ -69,7 +69,7 @@ public class QuotaServiceImpl implements IQuotaService {
         }
         if (policyOpt.isPresent()) {
             Integer maxChecks = policyOpt.get().getMaxChecksPerDay();
-            if (maxChecks != null && maxChecks > 0) {
+            if (maxChecks != null && maxChecks >= 0) {
                 return maxChecks;
             }
         }
