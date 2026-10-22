@@ -6,8 +6,8 @@ import com.be.scamshield.constant.RoleEnum;
 import com.be.scamshield.constant.UserStatus;
 import com.be.scamshield.dto.request.RegisterPartnerRequest;
 import com.be.scamshield.dto.request.VerifyContactsRequest;
-import com.be.scamshield.entity.ContactVerification;
-import com.be.scamshield.repository.ContactVerificationRepository;
+import com.be.scamshield.dto.ContactVerificationEntry;
+import com.be.scamshield.service.IContactVerificationStore;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.time.LocalDateTime;
@@ -70,7 +70,7 @@ class PartnerRegistrationServiceImplTest {
     @Mock
     private IOtpService otpService;
     @Mock
-    private ContactVerificationRepository verificationRepository;
+    private IContactVerificationStore verificationStore;
     @Spy
     private Clock applicationClock = Clock.system(ZoneId.of("Asia/Ho_Chi_Minh"));
     private PartnerRegistrationServiceImpl service;
@@ -82,7 +82,7 @@ class PartnerRegistrationServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        contactVerificationService = new ContactVerificationService(userRepository, otpService, verificationRepository, applicationClock);
+        contactVerificationService = new ContactVerificationService(userRepository, otpService, verificationStore, applicationClock);
         ReflectionTestUtils.setField(contactVerificationService, "verificationExpirationMs", 600000L);
         service = new PartnerRegistrationServiceImpl(applicationClock, profileRepository, documentRepository, userRepository,
                 roleRepository, passwordEncoder, contactVerificationService);
@@ -306,10 +306,10 @@ class PartnerRegistrationServiceImplTest {
     void verifiesContactsAndIssuesBoundTokenWithoutCreatingAccount() {
         var response = contactVerificationService.verifyContacts(contacts());
         assertThat(response.getVerificationToken()).matches("[A-Za-z0-9_-]{43}");
-        ArgumentCaptor<ContactVerification> grant = ArgumentCaptor.forClass(ContactVerification.class);
-        verify(verificationRepository).saveAndFlush(grant.capture());
+        ArgumentCaptor<ContactVerificationEntry> grant = ArgumentCaptor.forClass(ContactVerificationEntry.class);
+        verify(verificationStore).save(grant.capture(), any());
         assertThat(grant.getValue().getTokenHash()).hasSize(64).isNotEqualTo(response.getVerificationToken());
-        assertThat(grant.getValue().getEmail()).isEmpty();
+
         assertThat(grant.getValue().getPhoneNumber()).isEqualTo("0912345678");
         verify(otpService).verifyPhoneOtp("0912345678", "123456");
         assertNoWrites();
@@ -326,9 +326,9 @@ class PartnerRegistrationServiceImplTest {
     }
 
     private void prepareAccountPersistence() {
-        ContactVerification grant = ContactVerification.builder().phoneNumber("0912345678")
-                .expiresAt(LocalDateTime.now(applicationClock).plusMinutes(10)).build();
-        when(verificationRepository.findLockedByTokenHash(any())).thenReturn(Optional.of(grant));
+        when(verificationStore.consume(any(), any(), any())).thenReturn(0);
+
+
         when(roleRepository.findByName(RoleEnum.BUSINESS_PARTNER.name()))
                 .thenReturn(Optional.of(Role.builder().name(RoleEnum.BUSINESS_PARTNER.name()).build()));
         when(passwordEncoder.encode(any(String.class))).thenReturn("encoded-password");

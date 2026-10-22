@@ -55,7 +55,7 @@ public class GuestLeaderboardRepository {
         }
 
         String sql = """
-                SELECT 
+                SELECT
                     u.id AS user_id,
                     u.full_name AS full_name,
                     u.reputation_points AS reputation_points,
@@ -63,10 +63,10 @@ public class GuestLeaderboardRepository {
                     COUNT(rep.id) AS report_count
                 FROM users u
                 LEFT JOIN reputation_ranks r ON r.id = u.reputation_rank_id
-                """ + " " + reportJoin + """
+                """ + reportJoin + "\n" + """
                 WHERE u.status = 'ACTIVE'
                 GROUP BY u.id, u.full_name, u.reputation_points, r.name
-                ORDER BY """ + " " + orderBy + """
+                ORDER BY """ + " " + orderBy + "\n" + """
                 LIMIT :limit
                 """;
         return jdbc.query(sql, params, (rs, rowNum) -> new UserContribution(
