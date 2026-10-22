@@ -18,12 +18,12 @@ services:
   #   networks:
   #     - scamshield-net
 
-  # scamshield-redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   networks:
-  #     - scamshield-net
+  scamshield-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - scamshield-net
 
   scamshield-db:
     image: postgres:16-alpine

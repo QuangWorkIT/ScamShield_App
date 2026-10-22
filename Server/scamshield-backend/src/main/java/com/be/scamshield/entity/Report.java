@@ -48,10 +48,6 @@ public class Report {
     @Column(name = "region_code")
     private String regionCode;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "merged_into_report_id")
-    private Report mergedIntoReport;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "priority")
     private ReportPriority priority;
