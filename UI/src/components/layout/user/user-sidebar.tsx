@@ -16,7 +16,6 @@ import {
   SignOut,
   Sun,
   Moon,
-  ShieldStar,
 } from "@phosphor-icons/react"
 import {
   USER_NAV_ITEMS,
@@ -26,6 +25,7 @@ import {
 import { useLogout } from "@/hooks/use-logout"
 import { useNotificationStore } from "@/features/notification/store/notification.store"
 import { cn } from "@/lib/utils"
+import { UserQuotaCard } from "./user-quota-card"
 
 interface UserSidebarProps {
   className?: string
@@ -93,49 +93,7 @@ export function UserSidebar({ className, onCloseMobile }: UserSidebarProps) {
           </span>
         </div>
 
-        {/* User Profile Card (Sentinel Lv.2) */}
-        <div className="space-y-3 rounded-xl border border-[#C6C6CE]/30 bg-[#F2F3FF]/70 p-3.5 dark:border-border dark:bg-muted/30">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#131A33] font-heading text-sm font-bold text-white shadow-xs">
-              HV
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between">
-                <span className="truncate text-xs font-bold text-[#131B2E] dark:text-foreground">
-                  Hoàng Vũ
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#E2E7FF] px-2 py-0.5 text-[10px] font-bold text-[#555E7D] dark:bg-primary/20 dark:text-primary">
-                  <ShieldStar size={11} weight="fill" />
-                  <span>Sentinel Lv.2</span>
-                </span>
-              </div>
-              <span className="text-[11px] text-[#45464D] dark:text-muted-foreground">
-                Tài khoản bảo vệ
-              </span>
-            </div>
-          </div>
-
-          {/* AI Query Quota Progress */}
-          <div className="space-y-1.5 pt-1">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-[#45464D] dark:text-muted-foreground">
-                Hạn mức tra cứu AI
-              </span>
-              <span className="font-bold text-[#131B2E] dark:text-foreground">
-                18/50
-              </span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#DAE2FD] dark:bg-muted">
-              <div
-                className="h-full rounded-full bg-[#008CC7] transition-all duration-300 dark:bg-primary"
-                style={{ width: "36%" }}
-              />
-            </div>
-            <p className="text-right text-[10px] text-[#45464D] dark:text-muted-foreground">
-              Đã dùng 18/50 lượt hôm nay
-            </p>
-          </div>
-        </div>
+        <UserQuotaCard />
 
         {/* Navigation Menu */}
         <nav className="flex flex-col gap-1 pt-1">

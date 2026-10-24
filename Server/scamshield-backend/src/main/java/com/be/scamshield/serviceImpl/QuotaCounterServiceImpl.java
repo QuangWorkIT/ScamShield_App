@@ -42,18 +42,21 @@ public class QuotaCounterServiceImpl implements IQuotaCounterService {
                 ? System.currentTimeMillis() + ttl.toMillis()
                 : 0L;
 
-        CounterEntry entry = store.compute(key, (k, existing) -> {
+        long[] incrementedValue = new long[1];
+        store.compute(key, (k, existing) -> {
             if (existing == null || existing.isExpired()) {
+                incrementedValue[0] = 1L;
                 return new CounterEntry(1L, expireEpochMs);
             }
-            existing.value.incrementAndGet();
+            incrementedValue[0] = existing.value.incrementAndGet();
             if (existing.expiresAtEpochMs == 0L && expireEpochMs > 0L) {
                 existing.expiresAtEpochMs = expireEpochMs;
             }
             return existing;
         });
 
-        return entry.value.get();
+        // Return this increment's result, not a later value changed by another request.
+        return incrementedValue[0];
     }
 
     @Override
