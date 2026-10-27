@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { toast } from "react-toastify"
+import { CaretLeft, CaretRight } from "@phosphor-icons/react"
 import {
   ModeratorDisputeItem,
   DisputeVerdictPayload,
@@ -19,20 +20,29 @@ export default function ModeratorDisputesPage() {
   const [selectedId, setSelectedId] = useState<string>("")
   const [selectedDetail, setSelectedDetail] = useState<ModeratorDisputeItem | null>(null)
   const [pendingCount, setPendingCount] = useState<number>(0)
+  const [page, setPage] = useState<number>(0)
+  const [totalPages, setTotalPages] = useState<number>(1)
+  const [totalItems, setTotalItems] = useState<number>(0)
+  const [hasNext, setHasNext] = useState<boolean>(false)
+  const [hasPrevious, setHasPrevious] = useState<boolean>(false)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0)
 
-  // Fetch disputes queue & server pending count
+  // Fetch disputes queue & server pending count with pagination
   useEffect(() => {
     let isCancelled = false
     async function loadDisputes() {
       setIsLoading(true)
       try {
-        const data = await getModeratorDisputes()
+        const data = await getModeratorDisputes({ page, size: 10 })
         if (!isCancelled) {
           const disputeList = data.items || []
           setItems(disputeList)
           setPendingCount(data.pendingCount ?? disputeList.filter((d) => d.status === "Đang xét").length)
+          setTotalPages(Math.max(1, data.totalPages ?? 1))
+          setTotalItems(data.totalItems ?? disputeList.length)
+          setHasNext(Boolean(data.hasNext))
+          setHasPrevious(Boolean(data.hasPrevious))
 
           if (disputeList.length > 0) {
             setSelectedId((prev) => {
@@ -44,9 +54,10 @@ export default function ModeratorDisputesPage() {
             setSelectedDetail(null)
           }
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (!isCancelled) {
-          toast.error("Không thể tải danh sách hàng chờ khiếu nại")
+          const msg = err instanceof Error ? err.message : "Không thể tải danh sách hàng chờ khiếu nại"
+          toast.error(msg)
         }
       } finally {
         if (!isCancelled) {
@@ -59,7 +70,7 @@ export default function ModeratorDisputesPage() {
     return () => {
       isCancelled = true
     }
-  }, [refreshTrigger])
+  }, [page, refreshTrigger])
 
   // Fetch detailed dispute information whenever selectedId changes
   useEffect(() => {
@@ -141,6 +152,35 @@ export default function ModeratorDisputesPage() {
             ))
           )}
         </div>
+
+        {/* Pagination Navigation Footer */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2.5 text-xs dark:border-slate-800 dark:bg-slate-900">
+            <span className="font-medium text-slate-500 dark:text-slate-400">
+              Trang <strong className="text-slate-800 dark:text-slate-200">{page + 1}</strong> / {totalPages} ({totalItems} hồ sơ)
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={!hasPrevious && page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                className="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                aria-label="Trang trước"
+              >
+                <CaretLeft size={13} weight="bold" />
+              </button>
+              <button
+                type="button"
+                disabled={!hasNext && page >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                className="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                aria-label="Trang sau"
+              >
+                <CaretRight size={13} weight="bold" />
+              </button>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Right Column: Dispute Workspace Detail */}

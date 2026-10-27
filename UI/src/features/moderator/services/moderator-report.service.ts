@@ -163,6 +163,10 @@ export const MOCK_MODERATOR_QUEUE: ModeratorReportItem[] = [
   },
 ]
 
+const isMockFallbackEnabled = (): boolean => {
+  return process.env.NEXT_PUBLIC_ENABLE_MODERATOR_MOCK === "true"
+}
+
 function extractErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data
@@ -211,44 +215,41 @@ export async function getModeratorReportQueue(
       return res.data.data
     }
 
-    return {
-      data: [],
-      currentPage: 0,
-      totalItems: 0,
-      totalPages: 0,
-      pageSize: 20,
-      hasNext: false,
-      hasPrevious: false,
-    }
+    throw new Error(res.data?.message || "Không thể tải hàng đợi báo cáo")
   } catch (error) {
     console.error("Lỗi khi tải hàng đợi báo cáo từ backend:", error)
-    // Fallback gracefully to mock data for presentation/demo
-    const tab = params?.tab || "ALL"
-    let list = [...MOCK_MODERATOR_QUEUE]
-    if (tab === "PENDING") list = list.filter((i) => i.status === "Pending")
-    if (tab === "IN_REVIEW") list = list.filter((i) => i.status === "In Review")
-    if (tab === "LOCKED") list = list.filter((i) => i.isLocked || i.status === "Locked")
+    if (isMockFallbackEnabled()) {
+      const tab = params?.tab || "ALL"
+      let list = [...MOCK_MODERATOR_QUEUE]
+      if (tab === "PENDING") list = list.filter((i) => i.status === "Pending")
+      if (tab === "IN_REVIEW") list = list.filter((i) => i.status === "In Review")
+      if (tab === "LOCKED") list = list.filter((i) => i.isLocked || i.status === "Locked")
 
-    if (params?.search && params.search.trim()) {
-      const q = params.search.trim().toLowerCase()
-      list = list.filter(
-        (i) =>
-          i.id.toLowerCase().includes(q) ||
-          i.targetIdentifier.toLowerCase().includes(q) ||
-          i.category.toLowerCase().includes(q) ||
-          i.reportedBy.toLowerCase().includes(q)
-      )
+      if (params?.search && params.search.trim()) {
+        const q = params.search.trim().toLowerCase()
+        list = list.filter(
+          (i) =>
+            i.id.toLowerCase().includes(q) ||
+            i.targetIdentifier.toLowerCase().includes(q) ||
+            i.category.toLowerCase().includes(q) ||
+            i.reportedBy.toLowerCase().includes(q)
+        )
+      }
+
+      return {
+        data: list,
+        currentPage: 0,
+        totalItems: list.length,
+        totalPages: 1,
+        pageSize: 20,
+        hasNext: false,
+        hasPrevious: false,
+      }
     }
 
-    return {
-      data: list,
-      currentPage: 0,
-      totalItems: list.length,
-      totalPages: 1,
-      pageSize: 20,
-      hasNext: false,
-      hasPrevious: false,
-    }
+    throw new Error(
+      extractErrorMessage(error, "Không thể tải hàng đợi báo cáo từ backend")
+    )
   }
 }
 
@@ -265,20 +266,21 @@ export async function getModeratorQueueCounts(): Promise<ModeratorQueueCounts> {
       return res.data.data
     }
 
-    return {
-      all: 0,
-      pending: 0,
-      inReview: 0,
-      locked: 0,
-    }
+    throw new Error(res.data?.message || "Không thể tải số lượng hàng đợi kiểm duyệt")
   } catch (error) {
     console.error("Lỗi khi tải số lượng hàng đợi kiểm duyệt:", error)
-    return {
-      all: MOCK_MODERATOR_QUEUE.length,
-      pending: MOCK_MODERATOR_QUEUE.filter((i) => i.status === "Pending").length,
-      inReview: MOCK_MODERATOR_QUEUE.filter((i) => i.status === "In Review").length,
-      locked: MOCK_MODERATOR_QUEUE.filter((i) => i.isLocked || i.status === "Locked").length,
+    if (isMockFallbackEnabled()) {
+      return {
+        all: MOCK_MODERATOR_QUEUE.length,
+        pending: MOCK_MODERATOR_QUEUE.filter((i) => i.status === "Pending").length,
+        inReview: MOCK_MODERATOR_QUEUE.filter((i) => i.status === "In Review").length,
+        locked: MOCK_MODERATOR_QUEUE.filter((i) => i.isLocked || i.status === "Locked").length,
+      }
     }
+
+    throw new Error(
+      extractErrorMessage(error, "Không thể tải số lượng hàng đợi kiểm duyệt từ backend")
+    )
   }
 }
 
@@ -302,10 +304,12 @@ export async function getModeratorReportById(
     throw new Error(res.data?.message || "Không tìm thấy hồ sơ báo cáo")
   } catch (error) {
     console.error(`Lỗi khi tải chi tiết báo cáo ID ${id}:`, error)
-    const foundMock = MOCK_MODERATOR_QUEUE.find(
-      (m) => m.id === String(id) || m.rawId === numericId
-    )
-    if (foundMock) return foundMock
+    if (isMockFallbackEnabled()) {
+      const foundMock = MOCK_MODERATOR_QUEUE.find(
+        (m) => m.id === String(id) || m.rawId === numericId
+      )
+      if (foundMock) return foundMock
+    }
 
     throw new Error(extractErrorMessage(error, "Không thể tải chi tiết hồ sơ báo cáo"))
   }

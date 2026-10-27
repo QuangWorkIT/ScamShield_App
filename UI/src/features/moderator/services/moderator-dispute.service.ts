@@ -110,7 +110,7 @@ export async function getModeratorDisputes(
         items: responseData.items || [],
         pendingCount: responseData.pendingCount ?? 0,
         totalItems: responseData.totalItems ?? (responseData.items?.length || 0),
-        currentPage: responseData.currentPage ?? 0,
+        currentPage: responseData.currentPage ?? (params?.page ?? 0),
         pageSize: responseData.pageSize ?? 10,
         totalPages: responseData.totalPages ?? 1,
         hasNext: Boolean(responseData.hasNext),
@@ -118,29 +118,12 @@ export async function getModeratorDisputes(
       }
     }
 
-    return {
-      items: [],
-      pendingCount: 0,
-      totalItems: 0,
-      currentPage: 0,
-      pageSize: 10,
-      totalPages: 1,
-      hasNext: false,
-      hasPrevious: false,
-    }
+    throw new Error(res.data?.message || "Không thể tải danh sách kháng nghị")
   } catch (error) {
     console.error("Lỗi khi tải danh sách kháng nghị từ backend:", error)
-    // Fallback to mock data for presentation/demo
-    return {
-      items: [...MOCK_MODERATOR_DISPUTES],
-      pendingCount: MOCK_MODERATOR_DISPUTES.filter((d) => d.status === "Đang xét").length,
-      totalItems: MOCK_MODERATOR_DISPUTES.length,
-      currentPage: 0,
-      pageSize: 10,
-      totalPages: 1,
-      hasNext: false,
-      hasPrevious: false,
-    }
+    throw new Error(
+      extractErrorMessage(error, "Không thể tải danh sách kháng nghị từ backend")
+    )
   }
 }
 
@@ -162,11 +145,6 @@ export async function getModeratorDisputeById(
     throw new Error(res.data?.message || "Không tìm thấy hồ sơ khiếu nại")
   } catch (error) {
     console.error(`Lỗi khi tải chi tiết khiếu nại ${idOrCode}:`, error)
-    const found = MOCK_MODERATOR_DISPUTES.find(
-      (m) => m.id === String(idOrCode) || String(m.rawId) === String(idOrCode)
-    )
-    if (found) return found
-
     throw new Error(extractErrorMessage(error, "Không thể tải chi tiết ca khiếu nại"))
   }
 }

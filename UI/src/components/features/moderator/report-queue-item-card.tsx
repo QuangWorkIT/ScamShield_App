@@ -96,7 +96,7 @@ export function ReportQueueItemCard({ item, isSelected, onSelect }: ReportQueueI
                 item.aiScore != null && item.aiScore >= 80
                   ? "text-rose-600 dark:text-rose-400"
                   : item.aiScore != null
-                  ? "text-amber-600"
+                  ? "text-amber-600 dark:text-amber-400"
                   : "text-slate-400"
               }
             >
