@@ -77,6 +77,21 @@ public class InMemoryOtpStore implements IOtpStore {
     }
 
     @Override
+    public void decrementFailedAttemptsIfMatching(OtpEntry expected) {
+        if (expected.getOtpCode() == null || expected.getCreatedAt() == null) {
+            return;
+        }
+        entries.computeIfPresent(key(expected.getType(), expected.getTarget()), (k, existing) -> {
+            if (expected.getOtpCode().equals(existing.getOtpCode())
+                    && expected.getCreatedAt().equals(existing.getCreatedAt())
+                    && existing.getFailedAttempts() > 0) {
+                existing.setFailedAttempts(existing.getFailedAttempts() - 1);
+            }
+            return existing;
+        });
+    }
+
+    @Override
     public void recordPhoneOtpRequest(LocalDateTime timestamp) {
         phoneRequests.add(timestamp);
     }

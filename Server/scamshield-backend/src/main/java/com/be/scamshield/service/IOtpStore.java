@@ -19,6 +19,8 @@ public interface IOtpStore {
 
     void decrementFailedAttempts(String target, OtpType type);
 
+    void decrementFailedAttemptsIfMatching(OtpEntry expected);
+
     void recordPhoneOtpRequest(LocalDateTime timestamp);
 
     long countPhoneOtpRequestsSince(LocalDateTime since);

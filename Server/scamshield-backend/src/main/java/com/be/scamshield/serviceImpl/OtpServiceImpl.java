@@ -167,7 +167,14 @@ public class OtpServiceImpl implements IOtpService {
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = IllegalArgumentException.class)
     public boolean verifyContactOtps(String email, String emailCode, String phone, String phoneCode) {
         OtpEntry emailOtp = validateContactOtp(email, emailCode, OtpType.EMAIL, "email");
-        OtpEntry phoneOtp = validateContactOtp(phone, phoneCode, OtpType.PHONE, "điện thoại");
+        OtpEntry phoneOtp;
+        try {
+            phoneOtp = validateContactOtp(phone, phoneCode, OtpType.PHONE, "điện thoại");
+        } catch (RuntimeException ex) {
+            // The correct email code remains unconsumed; release only this attempt's reservation.
+            otpStore.decrementFailedAttemptsIfMatching(emailOtp);
+            throw ex;
+        }
         // Both checks must succeed before either challenge is consumed.
         markVerified(emailOtp);
         markVerified(phoneOtp);

@@ -51,6 +51,11 @@ public class RedisOtpStore implements IOtpStore {
             "end\n" +
             "return 0";
 
+    private static final String DECREMENT_MATCHING_FAILED_LUA =
+            "if redis.call('HGET', KEYS[1], 'otpCode') ~= ARGV[1] " +
+            "or redis.call('HGET', KEYS[1], 'createdAt') ~= ARGV[2] then return 0 end\n" +
+            DECREMENT_FAILED_LUA;
+
     private final StringRedisTemplate redisTemplate;
 
     private String key(OtpType type, String target) {
@@ -128,6 +133,16 @@ public class RedisOtpStore implements IOtpStore {
         String k = key(type, target);
         DefaultRedisScript<Long> script = new DefaultRedisScript<>(DECREMENT_FAILED_LUA, Long.class);
         redisTemplate.execute(script, Collections.singletonList(k));
+    }
+
+    @Override
+    public void decrementFailedAttemptsIfMatching(OtpEntry expected) {
+        if (expected.getOtpCode() == null || expected.getCreatedAt() == null) {
+            return;
+        }
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>(DECREMENT_MATCHING_FAILED_LUA, Long.class);
+        redisTemplate.execute(script, Collections.singletonList(key(expected.getType(), expected.getTarget())),
+                expected.getOtpCode(), expected.getCreatedAt().toString());
     }
 
     @Override
