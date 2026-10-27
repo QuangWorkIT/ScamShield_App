@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "react-toastify"
 import {
   ModeratorDisputeItem,
@@ -8,6 +8,7 @@ import {
 } from "@/features/moderator/types/moderator-dispute.types"
 import {
   getModeratorDisputes,
+  getModeratorDisputeById,
   submitDisputeVerdict,
 } from "@/features/moderator/services/moderator-dispute.service"
 import { DisputeQueueItemCard } from "@/components/features/moderator/dispute-queue-item-card"
@@ -16,54 +17,88 @@ import { DisputeDetailView } from "@/components/features/moderator/dispute-detai
 export default function ModeratorDisputesPage() {
   const [items, setItems] = useState<ModeratorDisputeItem[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
+  const [selectedDetail, setSelectedDetail] = useState<ModeratorDisputeItem | null>(null)
+  const [pendingCount, setPendingCount] = useState<number>(0)
   const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0)
 
+  // Fetch disputes queue & server pending count
   useEffect(() => {
+    let isCancelled = false
     async function loadDisputes() {
       setIsLoading(true)
       try {
         const data = await getModeratorDisputes()
-        setItems(data)
-        if (data.length > 0) {
-          setSelectedId(data[0].id)
+        if (!isCancelled) {
+          const disputeList = data.items || []
+          setItems(disputeList)
+          setPendingCount(data.pendingCount ?? disputeList.filter((d) => d.status === "Đang xét").length)
+
+          if (disputeList.length > 0) {
+            setSelectedId((prev) => {
+              const exists = disputeList.some((d) => d.id === prev)
+              return exists ? prev : disputeList[0].id
+            })
+          } else {
+            setSelectedId("")
+            setSelectedDetail(null)
+          }
         }
       } catch (err) {
-        toast.error("Không thể tải danh sách hàng chờ khiếu nại")
+        if (!isCancelled) {
+          toast.error("Không thể tải danh sách hàng chờ khiếu nại")
+        }
       } finally {
-        setIsLoading(false)
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
       }
     }
+
     loadDisputes()
-  }, [])
+    return () => {
+      isCancelled = true
+    }
+  }, [refreshTrigger])
 
-  const pendingCount = useMemo(() => {
-    return items.filter((i) => i.status === "Đang xét").length
-  }, [items])
+  // Fetch detailed dispute information whenever selectedId changes
+  useEffect(() => {
+    if (!selectedId) {
+      setSelectedDetail(null)
+      return
+    }
 
-  const selectedItem = useMemo(() => {
-    return items.find((i) => i.id === selectedId) || items[0] || null
-  }, [items, selectedId])
+    const currentItem = items.find((i) => i.id === selectedId) || null
+    setSelectedDetail(currentItem)
 
+    let isCancelled = false
+    getModeratorDisputeById(selectedId)
+      .then((detail) => {
+        if (!isCancelled && detail) {
+          setSelectedDetail(detail)
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch fresh dispute detail, using queue item:", err)
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [selectedId, items])
+
+  // Handle verdict submit
   const handleVerdictSubmitted = async (payload: DisputeVerdictPayload) => {
     try {
       const res = await submitDisputeVerdict(payload)
       if (res.success) {
         toast.success(res.message)
-        // Update local item status
-        setItems((prev) =>
-          prev.map((i) => {
-            if (i.id === payload.disputeId) {
-              return {
-                ...i,
-                status: payload.verdict === "RETRACT" ? "Chấp nhận" : "Từ chối",
-              }
-            }
-            return i
-          })
-        )
+        // Refresh queue & counts from backend
+        setRefreshTrigger((prev) => prev + 1)
       }
-    } catch (err) {
-      toast.error("Có lỗi xảy ra khi lưu phán quyết kháng nghị!")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Có lỗi xảy ra khi lưu phán quyết kháng nghị!"
+      toast.error(msg)
     }
   }
 
@@ -100,7 +135,7 @@ export default function ModeratorDisputesPage() {
               <DisputeQueueItemCard
                 key={item.id}
                 item={item}
-                isSelected={item.id === selectedItem?.id}
+                isSelected={item.id === selectedId}
                 onSelect={(selected) => setSelectedId(selected.id)}
               />
             ))
@@ -111,7 +146,7 @@ export default function ModeratorDisputesPage() {
       {/* Right Column: Dispute Workspace Detail */}
       <section className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
         <DisputeDetailView
-          item={selectedItem}
+          item={selectedDetail}
           onVerdictSubmitted={handleVerdictSubmitted}
         />
       </section>
