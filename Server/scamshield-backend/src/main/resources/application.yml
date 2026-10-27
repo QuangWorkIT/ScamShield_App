@@ -10,7 +10,7 @@ spring:
 
   # Database Configuration (PostgreSQL / Supabase)
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/scamshield-db}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/scamshield-db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -67,6 +67,16 @@ google:
 
 # Application Configurations
 app:
+  scam-check:
+    ai:
+      enabled: ${SCAM_CHECK_AI_ENABLED:true}
+      base-url: ${SCAM_CHECK_AI_BASE_URL:http://localhost:8000}
+      connect-timeout-ms: ${SCAM_CHECK_AI_CONNECT_TIMEOUT_MS:2000}
+      request-timeout-ms: ${SCAM_CHECK_AI_REQUEST_TIMEOUT_MS:60000}
+    registered-daily-limit: ${SCAM_CHECK_REGISTERED_DAILY_LIMIT:10}
+    retention-days: ${SCAM_CHECK_RETENTION_DAYS:30}
+    retention-cleanup-enabled: ${SCAM_CHECK_RETENTION_CLEANUP_ENABLED:true}
+    retention-cleanup-cron: ${SCAM_CHECK_RETENTION_CLEANUP_CRON:0 0 1 * * *}
   partner-business-verification:
     connect-timeout-seconds: ${PARTNER_VERIFICATION_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${PARTNER_VERIFICATION_READ_TIMEOUT_SECONDS:30}

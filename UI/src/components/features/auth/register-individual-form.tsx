@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { toast } from "react-toastify"
+import { GoogleAuthButton } from "@/components/features/auth/google-auth-button"
+import { GoogleRegisterModal } from "@/components/features/auth/google-register-modal"
 import { authServices } from "@/features/auth/services/auth-services"
 import { getRecaptchaToken } from "@/lib/firebase/recaptcha"
 import {
@@ -87,6 +89,14 @@ interface FormErrors {
 
 export function RegisterIndividualForm() {
   const [showPassword, setShowPassword] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isGoogleRegisterModalOpen, setIsGoogleRegisterModalOpen] = useState(false)
+  const [googleIdToken, setGoogleIdToken] = useState("")
+
+  function handleGoogleOAuthSuccess(credential: string) {
+    setGoogleIdToken(credential)
+    setIsGoogleRegisterModalOpen(true)
+  }
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [form, setForm] = useState<FormState>({
@@ -429,19 +439,16 @@ export function RegisterIndividualForm() {
 
           {/* Quick Google SSO */}
           <div className="flex flex-col gap-5">
-            <button
-              type="button"
-              onClick={() => {
-                // UI Mock
+            <GoogleAuthButton
+              text="signup_with"
+              label="Đăng ký bằng Google"
+              onSuccess={handleGoogleOAuthSuccess}
+              onError={(err) => {
+                toast.error(err || "Kết nối Google OAuth 2.0 thất bại")
               }}
-              className={cn(
-                "flex h-12 w-full items-center justify-center gap-2.5 rounded-lg border border-[#EAEDFF] bg-white px-4 text-sm font-semibold text-[#131B2E] transition-all",
-                "hover:bg-[#FAF8FF] dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted/50"
-              )}
-            >
-              <GoogleIcon className="size-5 shrink-0" />
-              <span>Đăng ký bằng Google</span>
-            </button>
+              isLoading={isGoogleLoading}
+              disabled={isSubmitting}
+            />
 
             {/* Divider */}
             <div className="flex items-center gap-3">
@@ -643,6 +650,17 @@ export function RegisterIndividualForm() {
           </div>
         </div>
       </div>
+
+
+      {/* Google Registration Phone & OTP Verification Modal */}
+      {isGoogleRegisterModalOpen && googleIdToken && (
+        <GoogleRegisterModal
+          isOpen={isGoogleRegisterModalOpen}
+          onClose={() => setIsGoogleRegisterModalOpen(false)}
+          idToken={googleIdToken}
+          initialPhone={form.phone}
+        />
+      )}
     </div>
   )
 }

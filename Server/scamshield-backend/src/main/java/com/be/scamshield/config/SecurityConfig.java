@@ -90,6 +90,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/partners/registrations").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/guest/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/scam-checks").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/scam-checks/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/dashboard/summary", "/api/dashboard/filters").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/resources/blacklist", "/api/resources/whitelist").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/education-hub", "/api/education-hub/filters",
