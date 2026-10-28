@@ -1,22 +1,22 @@
-import type { WhitelistStatus } from "@/features/admin/data/demo-whitelist"
+import type { PartnerReviewStatus } from "@/features/admin/services/admin-partner-registrations"
 import { cn } from "@/lib/utils"
 
 const statusStyles: Record<
-  WhitelistStatus,
+  PartnerReviewStatus,
   { label: string; className: string }
 > = {
-  active: {
-    label: "Active",
+  VERIFIED: {
+    label: "Đã phê duyệt",
     className:
       "bg-[#D1FAE5] text-[#065F46] border-[#A7F3D0] dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800",
   },
-  pending: {
-    label: "Pending",
+  PENDING: {
+    label: "Đang chờ",
     className:
       "bg-[#FEF3C7] text-[#92400E] border-[#FDE68A] dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800",
   },
-  suspended: {
-    label: "Suspended",
+  REJECTED: {
+    label: "Đã từ chối",
     className:
       "bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0] dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
   },
@@ -26,7 +26,7 @@ export function WhitelistStatusBadge({
   status,
   className,
 }: {
-  status: WhitelistStatus
+  status: PartnerReviewStatus
   className?: string
 }) {
   const config = statusStyles[status]
