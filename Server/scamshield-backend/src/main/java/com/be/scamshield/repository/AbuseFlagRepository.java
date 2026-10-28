@@ -19,7 +19,9 @@ public interface AbuseFlagRepository extends JpaRepository<AbuseFlag, Long> {
 
     long countByStatus(String status);
 
-    @EntityGraph(attributePaths = {"report"})
+    boolean existsByUserIdAndStatus(Long userId, String status);
+
+    @EntityGraph(attributePaths = {"report", "createdBy"})
     Page<AbuseFlag> findByUserIdAndStatusIn(Long userId, Collection<String> statuses, Pageable pageable);
 
 }

@@ -16,6 +16,8 @@ import java.util.Optional;
 @Repository
 public interface ReportRepository extends JpaRepository<Report, Long>, JpaSpecificationExecutor<Report> {
 
+    List<Report> findByReporterUserIdAndIdIn(Long userId, List<Long> reportIds);
+
     @Override
     @EntityGraph(attributePaths = {"indicator", "category", "reporterUser"})
     Page<Report> findAll(Specification<Report> spec, Pageable pageable);

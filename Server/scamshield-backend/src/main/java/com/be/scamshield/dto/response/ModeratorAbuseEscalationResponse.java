@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -24,6 +25,13 @@ public class ModeratorAbuseEscalationResponse {
 
     @Schema(description = "Báo cáo liên quan theo liên kết hiện có; null nếu hồ sơ chưa liên kết báo cáo")
     private Long reportId;
+
+    @Schema(description = "Tất cả ID báo cáo liên quan, bao gồm reportId của hồ sơ cũ")
+    private List<Long> reportIds;
+
+    @Schema(description = "ID Moderator tạo hồ sơ; null với dữ liệu cũ chưa ghi nhận người tạo")
+    private Long createdByUserId;
+    private String createdByName;
 
     private String flagType;
     private String severity;
