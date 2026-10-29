@@ -2,10 +2,12 @@ package com.be.scamshield.controller;
 
 import com.be.scamshield.dto.BaseResponse;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationFilterRequest;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationResponse;
 import com.be.scamshield.service.IAdminAbuseEscalationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
 
 @RestController
 @RequestMapping("/api/admin/abuse-escalations")
@@ -27,6 +30,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminAbuseEscalationController {
 
     private final IAdminAbuseEscalationService adminAbuseEscalationService;
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Lấy chi tiết hồ sơ lạm dụng tài khoản",
+            description = "Trả thông tin tài khoản hiện tại, các báo cáo liên quan và bằng chứng, kết quả kiểm duyệt gần nhất, "
+                    + "thống kê report trong 24 giờ kết thúc tại thời điểm tạo hồ sơ và audit của đúng hồ sơ. "
+                    + "Chỉ hỗ trợ PENDING, OPEN, DISMISSED. ID không hợp lệ trả 400; hồ sơ không tồn tại, RESOLVED cũ "
+                    + "hoặc không gắn với tài khoản trả 404.")
+    public ResponseEntity<BaseResponse<AdminAbuseEscalationDetailResponse>> getEscalationById(
+            @Parameter(description = "ID số của hồ sơ lạm dụng", example = "41") @PathVariable Long id) {
+        AdminAbuseEscalationDetailResponse result = adminAbuseEscalationService.getEscalationById(id);
+        return ResponseEntity.ok(new BaseResponse<>(true, "Lấy chi tiết hồ sơ lạm dụng thành công", result));
+    }
 
     @GetMapping
     @Operation(summary = "Lấy hàng đợi hồ sơ lạm dụng tài khoản",

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface AbuseFlagRepository extends JpaRepository<AbuseFlag, Long>, JpaSpecificationExecutor<AbuseFlag> {
@@ -18,6 +19,11 @@ public interface AbuseFlagRepository extends JpaRepository<AbuseFlag, Long>, Jpa
     @Override
     @EntityGraph(attributePaths = {"user", "createdBy", "report"})
     Page<AbuseFlag> findAll(Specification<AbuseFlag> spec, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"user", "createdBy", "report", "report.indicator", "report.category",
+            "report.reporterUser", "relatedReports", "relatedReports.indicator", "relatedReports.category",
+            "relatedReports.reporterUser"})
+    Optional<AbuseFlag> findByIdAndUserIsNotNullAndStatusIn(Long id, Collection<String> statuses);
 
     List<AbuseFlag> findByUserIdOrderByCreatedAtDesc(Long userId);
 

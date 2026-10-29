@@ -1,14 +1,30 @@
 package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.constant.AbuseFlagStatus;
+import com.be.scamshield.constant.EvidenceVerificationStatus;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse.AccountDetails;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse.AuditEntry;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse.Evidence;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse.LatestModeration;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse.RelatedReport;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse.ReportActivity;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationFilterRequest;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationResponse;
 import com.be.scamshield.entity.AbuseFlag;
+import com.be.scamshield.entity.AuditLog;
+import com.be.scamshield.entity.ModerationAction;
+import com.be.scamshield.entity.ReportEvidence;
 import com.be.scamshield.entity.Report;
 import com.be.scamshield.entity.User;
 import com.be.scamshield.exception.BadRequestException;
+import com.be.scamshield.exception.ResourceNotFoundException;
 import com.be.scamshield.repository.AbuseFlagRepository;
+import com.be.scamshield.repository.AuditLogRepository;
+import com.be.scamshield.repository.ModerationActionRepository;
+import com.be.scamshield.repository.ReportEvidenceRepository;
+import com.be.scamshield.repository.ReportRepository;
 import com.be.scamshield.service.IAdminAbuseEscalationService;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -24,11 +40,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.TreeSet;
+import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +63,97 @@ public class AdminAbuseEscalationServiceImpl implements IAdminAbuseEscalationSer
     private static final Pattern CODE_PATTERN = Pattern.compile("^(esc|u)-(\\d+)$");
 
     private final AbuseFlagRepository abuseFlagRepository;
+    private final ReportRepository reportRepository;
+    private final ReportEvidenceRepository reportEvidenceRepository;
+    private final ModerationActionRepository moderationActionRepository;
+    private final AuditLogRepository auditLogRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public AdminAbuseEscalationDetailResponse getEscalationById(Long id) {
+        if (id == null || id <= 0) {
+            throw new BadRequestException("ID hồ sơ phải là số nguyên dương");
+        }
+        AbuseFlag flag = abuseFlagRepository.findByIdAndUserIsNotNullAndStatusIn(id, SUPPORTED_STATUSES)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hồ sơ lạm dụng với ID: " + id));
+        User user = flag.getUser();
+        Map<Long, Report> reports = new TreeMap<>();
+        List<Report> candidates = new ArrayList<>(flag.getRelatedReports());
+        if (flag.getReport() != null) {
+            candidates.add(flag.getReport());
+        }
+        // Do not attribute another account's reports to this user if legacy links are inconsistent.
+        candidates.stream().filter(report -> report.getReporterUser() != null
+                        && user.getId().equals(report.getReporterUser().getId()))
+                .forEach(report -> reports.put(report.getId(), report));
+        List<Long> reportIds = List.copyOf(reports.keySet());
+        Map<Long, List<ReportEvidence>> evidenceByReport = reportIds.isEmpty() ? Map.of()
+                : reportEvidenceRepository.findByReportIdInOrderByCreatedAtAscIdAsc(reportIds).stream()
+                        .collect(Collectors.groupingBy(evidence -> evidence.getReport().getId()));
+        Map<Long, ModerationAction> latestActions = reportIds.isEmpty() ? Map.of()
+                : moderationActionRepository.findByReportIdInOrderByCreatedAtDescIdDesc(reportIds).stream()
+                        .collect(Collectors.toMap(action -> action.getReport().getId(), Function.identity(), (latest, older) -> latest));
+        List<RelatedReport> relatedReports = reports.values().stream()
+                .map(report -> mapRelatedReport(report, latestActions.get(report.getId()),
+                        evidenceByReport.getOrDefault(report.getId(), List.of())))
+                .toList();
+        AdminAbuseEscalationResponse summary = mapToResponse(flag);
+        summary.setReportIds(reportIds);
+
+        return AdminAbuseEscalationDetailResponse.builder()
+                .escalation(summary)
+                .accountDetails(AccountDetails.builder().phoneNumber(user.getPhoneNumber())
+                        .phoneVerified(user.getIsPhoneVerified()).reputationPoints(user.getReputationPoints())
+                        .joinedAt(user.getCreatedAt()).build())
+                .activity(getReportActivity(user.getId(), flag.getCreatedAt()))
+                .reports(relatedReports)
+                .auditTrail(auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDescIdDesc("ABUSE_FLAG", id)
+                        .stream().map(this::mapAuditEntry).toList())
+                .build();
+    }
+
+    private ReportActivity getReportActivity(Long userId, LocalDateTime windowEnd) {
+        LocalDateTime windowStart = windowEnd.minusHours(24);
+        ReportRepository.AbuseReportActivity totals = reportRepository.getAbuseReportActivity(userId, windowStart, windowEnd);
+        BigDecimal rejectedPercentage = totals.getTotalReports() == 0 ? null
+                : BigDecimal.valueOf(totals.getRejectedReports()).multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(totals.getTotalReports()), 2, RoundingMode.HALF_UP);
+        return ReportActivity.builder().windowStart(windowStart).windowEnd(windowEnd)
+                .totalReports(totals.getTotalReports()).rejectedReports(totals.getRejectedReports())
+                .distinctIndicators(totals.getDistinctIndicators()).rejectedPercentage(rejectedPercentage).build();
+    }
+
+    private RelatedReport mapRelatedReport(Report report, ModerationAction action, List<ReportEvidence> evidences) {
+        return RelatedReport.builder().id(report.getId()).reportCode("RPT-" + report.getId())
+                .indicatorId(report.getIndicator() == null ? null : report.getIndicator().getId())
+                .targetType(report.getIndicator() == null ? null : report.getIndicator().getType())
+                .targetValue(report.getIndicator() == null ? null
+                        : report.getIndicator().getDisplayValue() == null ? report.getIndicator().getNormalizedValue()
+                        : report.getIndicator().getDisplayValue())
+                .categoryId(report.getCategory() == null ? null : report.getCategory().getId())
+                .categoryName(report.getCategory() == null ? null : report.getCategory().getName())
+                .status(report.getStatus()).description(report.getDescription()).reportedMessage(report.getReportedMessage())
+                .createdAt(report.getCreatedAt()).updatedAt(report.getUpdatedAt())
+                .latestModeration(action == null ? null : LatestModeration.builder()
+                        .id(action.getId()).action(action.getAction()).reason(action.getReason())
+                        .moderatorUserId(action.getModeratorUser() == null ? null : action.getModeratorUser().getId())
+                        .moderatorName(action.getModeratorUser() == null ? null : action.getModeratorUser().getFullName())
+                        .createdAt(action.getCreatedAt()).build())
+                .evidences(evidences.stream().map(evidence -> Evidence.builder()
+                        .id(evidence.getId()).evidenceType(evidence.getEvidenceType()).fileName(evidence.getFileName())
+                        .fileUrl(evidence.getFileUrl()).sourceUrl(evidence.getSourceUrl())
+                        .extractedText(evidence.getExtractedText()).ocrText(evidence.getOcrText())
+                        .verificationStatus(EvidenceVerificationStatus.fromStoredValue(evidence.getVerificationStatus())).createdAt(evidence.getCreatedAt()).build()).toList())
+                .build();
+    }
+
+    private AuditEntry mapAuditEntry(AuditLog log) {
+        User actor = log.getActorUser();
+        return AuditEntry.builder().id(log.getId()).actorUserId(actor == null ? null : actor.getId())
+                .actorName(actor == null ? null : actor.getFullName()).action(log.getAction())
+                .previousValue(log.getPreviousValue()).newValue(log.getNewValue()).reason(log.getReason())
+                .createdAt(log.getCreatedAt()).build();
+    }
 
     @Override
     @Transactional(readOnly = true)

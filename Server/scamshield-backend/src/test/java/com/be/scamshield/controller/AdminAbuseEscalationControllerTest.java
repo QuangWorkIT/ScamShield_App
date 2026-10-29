@@ -3,8 +3,11 @@ package com.be.scamshield.controller;
 import com.be.scamshield.config.SecurityConfig;
 import com.be.scamshield.constant.AbuseFlagStatus;
 import com.be.scamshield.dto.PaginatedResponse;
+import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationFilterRequest;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationResponse;
+import com.be.scamshield.exception.BadRequestException;
+import com.be.scamshield.exception.ResourceNotFoundException;
 import com.be.scamshield.security.CustomAccessDeniedHandler;
 import com.be.scamshield.security.CustomUserDetailsService;
 import com.be.scamshield.security.JwtAuthenticationEntryPoint;
@@ -43,6 +46,74 @@ class AdminAbuseEscalationControllerTest {
     @MockitoBean private IAdminAbuseEscalationService service;
     @MockitoBean private JwtTokenProvider tokenProvider;
     @MockitoBean private CustomUserDetailsService customUserDetailsService;
+
+    @Test
+    void adminReceivesDetailWithoutExposingEntitiesOrAuditRequestMetadata() throws Exception {
+        AdminAbuseEscalationDetailResponse detail = AdminAbuseEscalationDetailResponse.builder()
+                .escalation(AdminAbuseEscalationResponse.builder().id(41L).userId(842L)
+                        .status(AbuseFlagStatus.PENDING).userStatus("ACTIVE").reportIds(List.of(10L)).build())
+                .accountDetails(AdminAbuseEscalationDetailResponse.AccountDetails.builder()
+                        .phoneNumber("0912345601").phoneVerified(true).reputationPoints(120).build())
+                .activity(AdminAbuseEscalationDetailResponse.ReportActivity.builder().totalReports(2).rejectedReports(1).build())
+                .reports(List.of(AdminAbuseEscalationDetailResponse.RelatedReport.builder().id(10L).status("REJECTED")
+                        .latestModeration(AdminAbuseEscalationDetailResponse.LatestModeration.builder()
+                                .action("REJECT").reason("Chưa đủ căn cứ xác minh").build())
+                        .evidences(List.of(AdminAbuseEscalationDetailResponse.Evidence.builder().id(5L).evidenceType("IMAGE").build()))
+                        .build()))
+                .auditTrail(List.of(AdminAbuseEscalationDetailResponse.AuditEntry.builder()
+                        .id(1L).action("CREATE_ABUSE_ESCALATION").build())).build();
+        when(service.getEscalationById(41L)).thenReturn(detail);
+        mvc.perform(get(URL + "/41").with(user("admin").roles("ADMINISTRATOR")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.data.escalation.id").value(41))
+                .andExpect(jsonPath("$.data.accountDetails.phoneVerified").value(true))
+                .andExpect(jsonPath("$.data.activity.totalReports").value(2))
+                .andExpect(jsonPath("$.data.reports[0].latestModeration.action").value("REJECT"))
+                .andExpect(jsonPath("$.data.reports[0].evidences[0].id").value(5))
+                .andExpect(jsonPath("$.data.auditTrail[0].action").value("CREATE_ABUSE_ESCALATION"))
+                .andExpect(jsonPath("$.data.accountDetails.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.data.escalation.user").doesNotExist())
+                .andExpect(jsonPath("$.data.reports[0].reporterUser").doesNotExist())
+                .andExpect(jsonPath("$.data.auditTrail[0].ipHash").doesNotExist())
+                .andExpect(jsonPath("$.data.auditTrail[0].requestId").doesNotExist());
+        verify(service).getEscalationById(41L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "ESC-0041", "9223372036854775808"})
+    void detailRequiresNumericLongId(String id) throws Exception {
+        mvc.perform(get(URL + "/" + id).with(user("admin").roles("ADMINISTRATOR")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.isSuccess").value(false));
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, -1})
+    void nonPositiveDetailIdReturnsBadRequest(Long id) throws Exception {
+        when(service.getEscalationById(id)).thenThrow(new BadRequestException("ID hồ sơ phải là số nguyên dương"));
+        mvc.perform(get(URL + "/" + id).with(user("admin").roles("ADMINISTRATOR")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.isSuccess").value(false));
+    }
+
+    @Test
+    void missingDetailReturnsNotFound() throws Exception {
+        when(service.getEscalationById(999L)).thenThrow(new ResourceNotFoundException("Không tìm thấy hồ sơ"));
+        mvc.perform(get(URL + "/999").with(user("admin").roles("ADMINISTRATOR")))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.isSuccess").value(false));
+    }
+
+    @Test
+    void anonymousCannotReadDetail() throws Exception {
+        mvc.perform(get(URL + "/41")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MODERATOR", "REGISTERED_USER", "BUSINESS_PARTNER", "GUEST"})
+    void onlyAdministratorCanReadDetail(String role) throws Exception {
+        mvc.perform(get(URL + "/41").with(user("other").roles(role))).andExpect(status().isForbidden());
+        verifyNoInteractions(service);
+    }
 
     @Test
     void adminReceivesSafePaginatedResponseAndPendingDefaults() throws Exception {

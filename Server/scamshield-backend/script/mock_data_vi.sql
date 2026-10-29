@@ -198,7 +198,7 @@ INSERT INTO rule_definitions (code, name, rule_type, version, is_active, is_froz
 
 -- 17. reports
 INSERT INTO reports (reporter_user_id, indicator_id, status, category_id, report_count_signal, coordinated_report_suspected, moderation_locked, created_at, updated_at) VALUES
-((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), (SELECT id FROM indicators WHERE normalized_value='0987654321'), 'PENDING', (SELECT id FROM scam_categories WHERE code='TRUNG_THUONG'), 1, false, false, NOW(), NOW());
+((SELECT id FROM users WHERE email='nguyenvana@gmail.com'), (SELECT id FROM indicators WHERE normalized_value='0987654321'), 'APPROVED', (SELECT id FROM scam_categories WHERE code='TRUNG_THUONG'), 1, false, false, NOW(), NOW());
 
 -- Nhiều báo cáo dùng chung một indicator để kiểm tra blacklist không bị đếm trùng.
 -- Báo cáo pending, đã thu hồi và thiếu tỉnh vẫn tính vào tổng lượt báo cáo.
@@ -366,12 +366,32 @@ JOIN users u ON u.email = 'admin@scamshield.vn'
 WHERE NOT EXISTS (SELECT 1 FROM confirmed_indicators ci WHERE ci.indicator_id = i.id);
 
 -- 19. report_evidence
-INSERT INTO report_evidence (report_id, evidence_type, verification_status, created_at) VALUES
-((SELECT id FROM reports LIMIT 1), 'SCREENSHOT', 'PENDING', NOW());
+-- Report được duyệt chỉ sau khi toàn bộ bằng chứng đã VERIFIED.
+INSERT INTO report_evidence (report_id, evidence_type, verification_status, created_at)
+SELECT r.id, 'SCREENSHOT', 'VERIFIED', r.created_at
+FROM reports r
+JOIN users u ON u.id = r.reporter_user_id
+JOIN indicators i ON i.id = r.indicator_id
+WHERE u.email = 'nguyenvana@gmail.com' AND i.normalized_value = '0987654321'
+  AND r.description IS NULL AND r.status = 'APPROVED'
+  AND NOT EXISTS (SELECT 1 FROM report_evidence e WHERE e.report_id = r.id);
+
+INSERT INTO report_evidence (report_id, evidence_type, verification_status, created_at)
+SELECT r.id, 'SCREENSHOT', CASE WHEN r.status = 'APPROVED' THEN 'VERIFIED' ELSE 'PENDING' END, r.created_at
+FROM reports r
+WHERE r.description LIKE 'REPORT-MOCK:%'
+  AND NOT EXISTS (SELECT 1 FROM report_evidence e WHERE e.report_id = r.id);
 
 -- 20. moderation_actions
-INSERT INTO moderation_actions (report_id, moderator_user_id, action, reason, created_at) VALUES
-((SELECT id FROM reports LIMIT 1), (SELECT id FROM users WHERE email='admin@scamshield.vn'), 'APPROVE', 'Bằng chứng rõ ràng', NOW());
+INSERT INTO moderation_actions (report_id, moderator_user_id, action, reason, previous_status, new_status, created_at)
+SELECT r.id, moderator.id, 'APPROVE', 'Đã xét toàn bộ bằng chứng và xác minh hợp lệ.', 'IN_REVIEW', 'APPROVED', r.updated_at
+FROM reports r
+JOIN users reporter ON reporter.id = r.reporter_user_id
+JOIN indicators i ON i.id = r.indicator_id
+JOIN users moderator ON moderator.email = 'admin@scamshield.vn'
+WHERE reporter.email = 'nguyenvana@gmail.com' AND i.normalized_value = '0987654321'
+  AND r.description IS NULL AND r.status = 'APPROVED'
+  AND NOT EXISTS (SELECT 1 FROM moderation_actions a WHERE a.report_id = r.id);
 
 -- Chỉ các báo cáo đã APPROVED/REJECTED mới có quyết định; giữ lý do phù hợp với kết quả.
 INSERT INTO moderation_actions (report_id, moderator_user_id, action, reason, previous_status, new_status, created_at)

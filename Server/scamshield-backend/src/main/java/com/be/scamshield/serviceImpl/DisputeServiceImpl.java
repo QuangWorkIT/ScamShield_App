@@ -1,5 +1,6 @@
 package com.be.scamshield.serviceImpl;
 
+import com.be.scamshield.constant.EvidenceVerificationStatus;
 import com.be.scamshield.constant.DisputeStatus;
 import com.be.scamshield.dto.PaginatedResponse;
 import com.be.scamshield.dto.request.DisputeListRequest;
@@ -59,7 +60,7 @@ public class DisputeServiceImpl implements IDisputeService {
                         file.getEvidenceType(), file.getFileName(), file.getStorageObjectKey() == null || file.getStorageObjectKey().isBlank() ? file.getFileUrl()
                                 : storageService.createDisputeDownloadUrl(file.getStorageObjectKey()),
                         file.getFileSize(), file.getContentType(), file.getDescription(),
-                        file.getVerificationStatus(), file.getCreatedAt()));
+                        EvidenceVerificationStatus.fromStoredValue(file.getVerificationStatus()), file.getCreatedAt()));
             }
         }
         return PaginatedResponse.buildPaginatedResponse(page.map(d -> toResponse(d, files.getOrDefault(d.getId(), List.of()))));

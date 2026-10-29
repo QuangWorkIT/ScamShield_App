@@ -1,24 +1,33 @@
 package com.be.scamshield.serviceImpl;
 
+import com.be.scamshield.constant.EvidenceVerificationStatus;
+import java.util.Locale;
 import com.be.scamshield.constant.AbuseFlagStatus;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationFilterRequest;
 import com.be.scamshield.entity.AbuseFlag;
+import com.be.scamshield.entity.AuditLog;
 import com.be.scamshield.entity.Indicator;
+import com.be.scamshield.entity.ModerationAction;
 import com.be.scamshield.entity.Report;
+import com.be.scamshield.entity.ReportEvidence;
+import com.be.scamshield.entity.ScamCategory;
 import com.be.scamshield.entity.User;
 import com.be.scamshield.exception.BadRequestException;
+import com.be.scamshield.exception.ResourceNotFoundException;
 import com.be.scamshield.service.IAdminAbuseEscalationService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,6 +56,239 @@ class AdminAbuseEscalationPersistenceTest {
         target = account("Trần Minh Khôi", "khoi.tran@example.test", "0912345601");
         other = account("Lê Thanh Hà", "ha.le@example.test", "0912345602");
         moderator = account("Mai Phương", "moderator@example.test", "0912345603");
+    }
+
+    @Test
+    void detailCombinesSelectedReportsEvidenceLatestModerationAccountAndScopedAudit() {
+        target.setStatus("SUSPENDED");
+        target.setIsPhoneVerified(true);
+        target.setReputationPoints(120);
+        target.setCreatedAt(NOW.minusDays(90));
+        Report rejected = report(target, "reported.example");
+        rejected.setCreatedAt(NOW.minusHours(1));
+        rejected.setDescription("Mô tả báo cáo cần đối chiếu");
+        rejected.setReportedMessage("Tin nhắn yêu cầu chuyển tiền");
+        rejected.getIndicator().setDisplayValue("https://reported.example");
+        ScamCategory category = ScamCategory.builder().code("ABUSE_TEST").name("Giả mạo")
+                .version(1).isActive(true).createdAt(NOW).updatedAt(NOW).build();
+        entityManager.persist(category);
+        rejected.setCategory(category);
+        Report pending = report(target, "pending.example");
+        pending.setIndicator(rejected.getIndicator());
+        pending.setCreatedAt(NOW.minusHours(2));
+        pending.setStatus("PENDING");
+        Report outsideWindow = report(target, "old.example");
+        outsideWindow.setCreatedAt(NOW.minusHours(25));
+        Report afterEscalation = report(target, "future.example");
+        afterEscalation.setCreatedAt(NOW.plusHours(1));
+        Report foreign = report(other, "foreign.example");
+
+        AbuseFlag selected = flag(target, "PENDING", NOW);
+        selected.setReport(rejected);
+        selected.setRelatedReports(new ArrayList<>(List.of(pending, rejected)));
+        AbuseFlag anotherCase = flag(other, "OPEN", NOW);
+        ReportEvidence firstEvidence = evidence(rejected, "first.png");
+        ReportEvidence secondEvidence = evidence(rejected, "second.png");
+        evidence(foreign, "private.png");
+        moderation(rejected, "Ancient decision", NOW.minusHours(1));
+        moderation(rejected, "Earlier decision at same time", NOW.minusMinutes(15));
+        ModerationAction latest = moderation(rejected, "Latest decision at same time", NOW.minusMinutes(15));
+        moderation(foreign, "Another user's decision", NOW);
+        AuditLog firstAudit = audit(selected.getId(), "ABUSE_FLAG", moderator, "CREATE_ABUSE_ESCALATION");
+        AuditLog latestAudit = audit(selected.getId(), "ABUSE_FLAG", null, "SYSTEM_NOTE");
+        audit(anotherCase.getId(), "ABUSE_FLAG", moderator, "ANOTHER_CASE");
+        audit(selected.getId(), "USER", moderator, "UNRELATED_ENTITY");
+        flushAndClear();
+
+        var detail = service.getEscalationById(selected.getId());
+        assertThat(detail.getEscalation().getUserId()).isEqualTo(target.getId());
+        assertThat(detail.getEscalation().getStatus()).isEqualTo(AbuseFlagStatus.PENDING);
+        assertThat(detail.getEscalation().getUserStatus()).isEqualTo("SUSPENDED");
+        assertThat(detail.getEscalation().getReportIds()).containsExactly(rejected.getId(), pending.getId());
+        assertThat(detail.getAccountDetails().getPhoneVerified()).isTrue();
+        assertThat(detail.getAccountDetails().getReputationPoints()).isEqualTo(120);
+        assertThat(detail.getAccountDetails().getJoinedAt()).isEqualTo(NOW.minusDays(90));
+        assertThat(detail.getActivity().getWindowStart()).isEqualTo(NOW.minusHours(24));
+        assertThat(detail.getActivity().getWindowEnd()).isEqualTo(NOW);
+        assertThat(detail.getActivity().getTotalReports()).isEqualTo(2);
+        assertThat(detail.getActivity().getRejectedReports()).isEqualTo(1);
+        assertThat(detail.getActivity().getDistinctIndicators()).isEqualTo(1);
+        assertThat(detail.getActivity().getRejectedPercentage()).isEqualByComparingTo(new BigDecimal("50.00"));
+        assertThat(detail.getReports()).hasSize(2);
+        var first = detail.getReports().getFirst();
+        assertThat(first.getId()).isEqualTo(rejected.getId());
+        assertThat(first.getReportCode()).isEqualTo("RPT-" + rejected.getId());
+        assertThat(first.getTargetValue()).isEqualTo("https://reported.example");
+        assertThat(first.getCategoryName()).isEqualTo("Giả mạo");
+        assertThat(first.getDescription()).isEqualTo("Mô tả báo cáo cần đối chiếu");
+        assertThat(first.getReportedMessage()).isEqualTo("Tin nhắn yêu cầu chuyển tiền");
+        assertThat(first.getLatestModeration().getId()).isEqualTo(latest.getId());
+        assertThat(first.getLatestModeration().getReason()).isEqualTo("Latest decision at same time");
+        assertThat(first.getLatestModeration().getModeratorName()).isEqualTo("Mai Phương");
+        assertThat(first.getEvidences()).extracting(item -> item.getId()).containsExactly(firstEvidence.getId(), secondEvidence.getId());
+        assertThat(first.getEvidences().getFirst().getFileUrl()).isEqualTo("https://files.example.test/first.png");
+        assertThat(detail.getReports().get(1).getLatestModeration()).isNull();
+        assertThat(detail.getReports().get(1).getEvidences()).isEmpty();
+        assertThat(detail.getAuditTrail()).extracting(item -> item.getId()).containsExactly(latestAudit.getId(), firstAudit.getId());
+        assertThat(detail.getAuditTrail().getFirst().getActorUserId()).isNull();
+        assertThat(detail.getAuditTrail().get(1).getActorName()).isEqualTo("Mai Phương");
+    }
+
+    @Test
+    void activityIncludesWindowBoundariesAndRoundsPercentageWithoutCountingOtherUsers() {
+        Report start = report(target, "start.example");
+        start.setCreatedAt(NOW.minusHours(24));
+        Report end = report(target, "end.example");
+        end.setCreatedAt(NOW);
+        end.setIndicator(start.getIndicator());
+        end.setStatus("PENDING");
+        Report middle = report(target, "middle.example");
+        middle.setCreatedAt(NOW.minusHours(4));
+        middle.setStatus("APPROVED");
+        report(target, "too-old.example").setCreatedAt(NOW.minusHours(24).minusSeconds(1));
+        report(target, "too-new.example").setCreatedAt(NOW.plusSeconds(1));
+        report(other, "other.example");
+        AbuseFlag selected = flag(target, "OPEN", NOW);
+        flushAndClear();
+
+        var activity = service.getEscalationById(selected.getId()).getActivity();
+        assertThat(activity.getTotalReports()).isEqualTo(3);
+        assertThat(activity.getRejectedReports()).isEqualTo(1);
+        assertThat(activity.getDistinctIndicators()).isEqualTo(2);
+        assertThat(activity.getRejectedPercentage()).isEqualByComparingTo(new BigDecimal("33.33"));
+    }
+
+    @Test
+    void detailSupportsLegacyPrimaryReportWithoutCreatorCategoryEvidenceOrAudit() {
+        Report legacy = report(target, "legacy-detail.example");
+        AbuseFlag selected = flag(target, "OPEN", NOW);
+        selected.setReport(legacy);
+        selected.setCreatedBy(null);
+        selected.setFlagType("SPAM");
+        flushAndClear();
+        var detail = service.getEscalationById(selected.getId());
+        assertThat(detail.getEscalation().getCreatedByUserId()).isNull();
+        assertThat(detail.getEscalation().getFlagType()).isEqualTo("SPAM");
+        assertThat(detail.getEscalation().getReportIds()).containsExactly(legacy.getId());
+        assertThat(detail.getReports()).singleElement().satisfies(item -> {
+            assertThat(item.getTargetValue()).isEqualTo("legacy-detail.example");
+            assertThat(item.getCategoryId()).isNull();
+            assertThat(item.getLatestModeration()).isNull();
+            assertThat(item.getEvidences()).isEmpty();
+        });
+        assertThat(detail.getAuditTrail()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PENDING", "OPEN", "DISMISSED"})
+    void detailSupportsEachCurrentStatusAndEmptyCollections(String status) {
+        AbuseFlag selected = flag(target, status, NOW);
+        flushAndClear();
+        var detail = service.getEscalationById(selected.getId());
+        assertThat(detail.getEscalation().getStatus()).isEqualTo(AbuseFlagStatus.valueOf(status));
+        assertThat(detail.getEscalation().getReportIds()).isEmpty();
+        assertThat(detail.getReports()).isEmpty();
+        assertThat(detail.getAuditTrail()).isEmpty();
+        assertThat(detail.getActivity().getTotalReports()).isZero();
+        assertThat(detail.getActivity().getRejectedReports()).isZero();
+        assertThat(detail.getActivity().getDistinctIndicators()).isZero();
+        assertThat(detail.getActivity().getRejectedPercentage()).isNull();
+    }
+
+    @Test
+    void detailNeverAttributesForeignReportLinksOrEvidenceToTargetAccount() {
+        Report owned = report(target, "owned-detail.example");
+        Report foreign = report(other, "foreign-detail.example");
+        evidence(foreign, "foreign.png");
+        AbuseFlag selected = flag(target, "PENDING", NOW);
+        selected.setReport(foreign);
+        selected.setRelatedReports(new ArrayList<>(List.of(owned, foreign)));
+        flushAndClear();
+        var detail = service.getEscalationById(selected.getId());
+        assertThat(detail.getEscalation().getReportIds()).containsExactly(owned.getId());
+        assertThat(detail.getReports()).singleElement().satisfies(item -> {
+            assertThat(item.getId()).isEqualTo(owned.getId());
+            assertThat(item.getEvidences()).isEmpty();
+        });
+        assertThat(detail.getActivity().getTotalReports()).isEqualTo(1);
+    }
+
+    @Test
+    void reportsOutsideActivityWindowCanStillServeAsLinkedEvidence() {
+        Report old = report(target, "old-detail.example");
+        old.setCreatedAt(NOW.minusHours(25));
+        AbuseFlag selected = flag(target, "OPEN", NOW);
+        selected.setReport(old);
+        flushAndClear();
+        var detail = service.getEscalationById(selected.getId());
+        assertThat(detail.getReports()).hasSize(1);
+        assertThat(detail.getActivity().getTotalReports()).isZero();
+        assertThat(detail.getActivity().getRejectedPercentage()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"RESOLVED", "UNSUPPORTED"})
+    void detailRejectsStatusesNotSupportedByQueue(String status) {
+        AbuseFlag selected = flag(target, status, NOW);
+        flushAndClear();
+        assertThatThrownBy(() -> service.getEscalationById(selected.getId())).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void missingCaseAndCaseWithoutAccountAreNotFound() {
+        AbuseFlag orphan = flag(null, "PENDING", NOW);
+        flushAndClear();
+        assertThatThrownBy(() -> service.getEscalationById(orphan.getId())).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getEscalationById(Long.MAX_VALUE)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(longs = {0, -1})
+    void detailRejectsNonPositiveOrNullId(Long id) {
+        assertThatThrownBy(() -> service.getEscalationById(id)).isInstanceOf(BadRequestException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PENDING", "VERIFIED", "REJECTED", "OCR_PASS", " verified ", "LEGACY_UNKNOWN"})
+    void detailMapsStringEvidenceStatusWithoutChangingStoredValue(String storedStatus) {
+        Report linked = report(target, "enum-evidence.example");
+        AbuseFlag selected = flag(target, "PENDING", NOW);
+        selected.setReport(linked);
+        ReportEvidence attached = evidence(linked, "status.png");
+        attached.setVerificationStatus(storedStatus);
+        flushAndClear();
+
+        var response = service.getEscalationById(selected.getId()).getReports().getFirst().getEvidences().getFirst();
+        if ("LEGACY_UNKNOWN".equals(storedStatus) || "OCR_PASS".equals(storedStatus)) {
+            assertThat(response.getVerificationStatus()).isNull();
+        } else {
+            assertThat(response.getVerificationStatus()).isEqualTo(
+                    EvidenceVerificationStatus.valueOf(storedStatus.trim().toUpperCase(Locale.ROOT)));
+        }
+        assertThat(entityManager.find(ReportEvidence.class, attached.getId()).getVerificationStatus()).isEqualTo(storedStatus);
+    }
+
+    private ReportEvidence evidence(Report report, String fileName) {
+        ReportEvidence evidence = ReportEvidence.builder().report(report).evidenceType("IMAGE").fileName(fileName)
+                .fileUrl("https://files.example.test/" + fileName).verificationStatus(EvidenceVerificationStatus.PENDING.name()).createdAt(NOW).build();
+        entityManager.persist(evidence);
+        return evidence;
+    }
+
+    private ModerationAction moderation(Report report, String reason, LocalDateTime createdAt) {
+        ModerationAction action = ModerationAction.builder().report(report).moderatorUser(moderator)
+                .action("REJECT").reason(reason).createdAt(createdAt).build();
+        entityManager.persist(action);
+        return action;
+    }
+
+    private AuditLog audit(Long entityId, String entityType, User actor, String action) {
+        AuditLog log = AuditLog.builder().entityId(entityId).entityType(entityType).actorUser(actor).action(action)
+                .reason("Lý do ghi nhận trong nhật ký").previousValue("PENDING").newValue("OPEN")
+                .ipHash("internal-ip-hash").requestId("internal-request-id").createdAt(NOW).build();
+        entityManager.persist(log);
+        return log;
     }
 
     @Test
