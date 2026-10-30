@@ -1,6 +1,13 @@
 package com.be.scamshield.controller;
 
 import com.be.scamshield.config.SecurityConfig;
+import com.be.scamshield.security.UserPrincipal;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.http.MediaType;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.mockito.ArgumentMatchers.eq;
+import com.be.scamshield.dto.request.DecideAbuseEscalationRequest;
+import com.be.scamshield.exception.AbuseEscalationConflictException;
 import com.be.scamshield.constant.AbuseFlagStatus;
 import com.be.scamshield.dto.PaginatedResponse;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse;
@@ -46,6 +53,53 @@ class AdminAbuseEscalationControllerTest {
     @MockitoBean private IAdminAbuseEscalationService service;
     @MockitoBean private JwtTokenProvider tokenProvider;
     @MockitoBean private CustomUserDetailsService customUserDetailsService;
+
+    @ParameterizedTest
+    @ValueSource(strings = {"DISMISS", "FLAG", "SUSPEND", "BAN"})
+    void administratorCanSubmitDecision(String decision) throws Exception {
+        UserPrincipal principal = UserPrincipal.builder().id(99L).username("administrator")
+                .authorities(List.of(new SimpleGrantedAuthority("ROLE_ADMINISTRATOR"))).build();
+        when(service.decideEscalation(eq(41L), any(), any())).thenReturn(
+                AdminAbuseEscalationResponse.builder().id(41L).status(AbuseFlagStatus.OPEN).build());
+        mvc.perform(put(URL + "/41").with(user(principal)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"" + decision + "\",\"reason\":\"Đã xem xét toàn bộ bằng chứng liên quan.\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(41));
+        verify(service).decideEscalation(eq(41L), any(DecideAbuseEscalationRequest.class), eq(principal));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"decision\":\"OTHER\",\"reason\":\"Lý do không hợp lệ\"}",
+            "{\"decision\":\"BAN\",\"reason\":\"ngắn\"}"})
+    void decisionValidatesBody(String body) throws Exception {
+        mvc.perform(put(URL + "/41").with(user("admin").roles("ADMINISTRATOR"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MODERATOR", "REGISTERED_USER", "BUSINESS_PARTNER"})
+    void otherRolesCannotDecide(String role) throws Exception {
+        mvc.perform(put(URL + "/41").with(user("other").roles(role)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"BAN\",\"reason\":\"Đã xem xét toàn bộ bằng chứng liên quan.\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void anonymousCannotDecide() throws Exception {
+        mvc.perform(put(URL + "/41").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void decidedCaseReturnsConflict() throws Exception {
+        when(service.decideEscalation(eq(41L), any(), any())).thenThrow(new AbuseEscalationConflictException("Hồ sơ đã xử lý"));
+        mvc.perform(put(URL + "/41").with(user("admin").roles("ADMINISTRATOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"BAN\",\"reason\":\"Đã xem xét toàn bộ bằng chứng liên quan.\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.isSuccess").value(false));
+    }
 
     @Test
     void adminReceivesDetailWithoutExposingEntitiesOrAuditRequestMetadata() throws Exception {

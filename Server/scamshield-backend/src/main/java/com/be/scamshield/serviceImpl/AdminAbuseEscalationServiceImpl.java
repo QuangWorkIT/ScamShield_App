@@ -1,6 +1,15 @@
 package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.constant.AbuseFlagStatus;
+import com.be.scamshield.constant.AbuseEscalationDecision;
+import com.be.scamshield.dto.request.DecideAbuseEscalationRequest;
+import com.be.scamshield.security.UserPrincipal;
+import com.be.scamshield.repository.UserRepository;
+import com.be.scamshield.exception.AbuseEscalationConflictException;
+import com.be.scamshield.exception.UnauthorizedException;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import java.time.Clock;
 import com.be.scamshield.constant.EvidenceVerificationStatus;
 import com.be.scamshield.dto.PaginatedResponse;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse;
@@ -39,6 +48,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Map;
@@ -63,10 +73,87 @@ public class AdminAbuseEscalationServiceImpl implements IAdminAbuseEscalationSer
     private static final Pattern CODE_PATTERN = Pattern.compile("^(esc|u)-(\\d+)$");
 
     private final AbuseFlagRepository abuseFlagRepository;
+    private final UserRepository userRepository;
+    private final Clock applicationClock;
     private final ReportRepository reportRepository;
     private final ReportEvidenceRepository reportEvidenceRepository;
     private final ModerationActionRepository moderationActionRepository;
     private final AuditLogRepository auditLogRepository;
+
+    @Override
+    @Transactional
+    public AdminAbuseEscalationResponse decideEscalation(
+            Long id, DecideAbuseEscalationRequest request, UserPrincipal currentUser) {
+        if (id == null || id <= 0) {
+            throw new BadRequestException("ID hồ sơ phải là số nguyên dương");
+        }
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new UnauthorizedException("Vui lòng đăng nhập để xử lý hồ sơ");
+        }
+        User admin = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new UnauthorizedException("Không tìm thấy tài khoản đăng nhập"));
+        if (admin.getRole() == null || !"ADMINISTRATOR".equals(admin.getRole().getName())
+                || !"ACTIVE".equals(admin.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ quản trị viên đang hoạt động được xử lý hồ sơ");
+        }
+        if (request == null || request.getDecision() == null || request.getReason() == null) {
+            throw new BadRequestException("Quyết định và lý do không được để trống");
+        }
+        String reason = request.getReason().strip();
+        if (reason.length() < 20 || reason.length() > 2000) {
+            throw new BadRequestException("Lý do quyết định phải từ 20 đến 2000 ký tự sau khi bỏ khoảng trắng đầu và cuối");
+        }
+        Long targetId = abuseFlagRepository.findTargetUserId(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hồ sơ lạm dụng với ID: " + id));
+        // Match the moderator submission lock order: account first, then case.
+        User target = userRepository.findByIdForUpdate(targetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản của hồ sơ"));
+        AbuseFlag flag = abuseFlagRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hồ sơ lạm dụng với ID: " + id));
+        if (flag.getUser() == null || !targetId.equals(flag.getUser().getId())) {
+            throw new AbuseEscalationConflictException("Tài khoản của hồ sơ đã thay đổi, vui lòng tải lại");
+        }
+        if (!SUPPORTED_STATUSES.contains(flag.getStatus())) {
+            throw new ResourceNotFoundException("Không tìm thấy hồ sơ lạm dụng với ID: " + id);
+        }
+        if (!AbuseFlagStatus.PENDING.name().equals(flag.getStatus())) {
+            throw new AbuseEscalationConflictException("Hồ sơ đã có quyết định xử lý");
+        }
+        AbuseEscalationDecision decision = request.getDecision();
+        String oldUserStatus = target.getStatus();
+        String newUserStatus = switch (decision) {
+            case SUSPEND -> "SUSPENDED";
+            case BAN -> "BANNED";
+            default -> oldUserStatus;
+        };
+        if ((decision == AbuseEscalationDecision.SUSPEND || decision == AbuseEscalationDecision.BAN)
+                && targetId.equals(admin.getId())) {
+            throw new BadRequestException("Bạn không thể tự khóa hoặc cấm tài khoản của chính mình");
+        }
+        if (decision == AbuseEscalationDecision.SUSPEND && "BANNED".equals(oldUserStatus)) {
+            throw new AbuseEscalationConflictException("Không thể chuyển tài khoản đã bị cấm sang tạm khóa");
+        }
+        LocalDateTime now = LocalDateTime.now(applicationClock);
+        String newFlagStatus = decision == AbuseEscalationDecision.DISMISS
+                ? AbuseFlagStatus.DISMISSED.name() : AbuseFlagStatus.OPEN.name();
+        flag.setStatus(newFlagStatus);
+        // OPEN remains an active flag; review time and action are recorded in audit.
+        flag.setResolvedAt(decision == AbuseEscalationDecision.DISMISS ? now : null);
+        abuseFlagRepository.save(flag);
+        auditLogRepository.save(AuditLog.builder().actorUser(admin)
+                .action("DECIDE_ABUSE_ESCALATION_" + decision.name()).entityType("ABUSE_FLAG").entityId(id)
+                .previousValue(AbuseFlagStatus.PENDING.name()).newValue(newFlagStatus)
+                .reason(reason).createdAt(now).build());
+        if (!Objects.equals(oldUserStatus, newUserStatus)) {
+            target.setStatus(newUserStatus);
+            target.setUpdatedAt(now);
+            userRepository.save(target);
+            auditLogRepository.save(AuditLog.builder().actorUser(admin).action("UPDATE_STATUS")
+                    .entityType("USER").entityId(targetId).previousValue(oldUserStatus).newValue(newUserStatus)
+                    .reason("Hồ sơ ESC-" + id + ": " + reason).createdAt(now).build());
+        }
+        return mapToResponse(flag);
+    }
 
     @Override
     @Transactional(readOnly = true)

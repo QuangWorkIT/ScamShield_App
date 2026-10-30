@@ -1,6 +1,10 @@
 package com.be.scamshield.repository;
 
 import com.be.scamshield.entity.AbuseFlag;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -15,6 +19,13 @@ import java.util.Optional;
 
 @Repository
 public interface AbuseFlagRepository extends JpaRepository<AbuseFlag, Long>, JpaSpecificationExecutor<AbuseFlag> {
+
+    @Query("select f.user.id from AbuseFlag f where f.id = :id and f.user is not null")
+    Optional<Long> findTargetUserId(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select f from AbuseFlag f where f.id = :id")
+    Optional<AbuseFlag> findByIdForUpdate(@Param("id") Long id);
 
     @Override
     @EntityGraph(attributePaths = {"user", "createdBy", "report"})

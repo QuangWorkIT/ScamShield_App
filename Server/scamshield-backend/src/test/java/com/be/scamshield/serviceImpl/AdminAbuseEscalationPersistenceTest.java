@@ -2,6 +2,16 @@ package com.be.scamshield.serviceImpl;
 
 import com.be.scamshield.constant.EvidenceVerificationStatus;
 import java.util.Locale;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import static org.mockito.Mockito.when;
+import com.be.scamshield.constant.AbuseEscalationDecision;
+import com.be.scamshield.dto.request.DecideAbuseEscalationRequest;
+import com.be.scamshield.entity.Role;
+import com.be.scamshield.security.UserPrincipal;
+import com.be.scamshield.exception.AbuseEscalationConflictException;
 import com.be.scamshield.constant.AbuseFlagStatus;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationFilterRequest;
 import com.be.scamshield.entity.AbuseFlag;
@@ -47,15 +57,116 @@ class AdminAbuseEscalationPersistenceTest {
 
     @Autowired private IAdminAbuseEscalationService service;
     @Autowired private EntityManager entityManager;
+    @MockitoBean private Clock applicationClock;
     private User target;
     private User other;
     private User moderator;
 
     @BeforeEach
     void setUp() {
+        when(applicationClock.instant()).thenReturn(Instant.parse("2026-10-29T02:00:00Z"));
+        when(applicationClock.getZone()).thenReturn(ZoneId.of("Asia/Ho_Chi_Minh"));
         target = account("Trần Minh Khôi", "khoi.tran@example.test", "0912345601");
         other = account("Lê Thanh Hà", "ha.le@example.test", "0912345602");
         moderator = account("Mai Phương", "moderator@example.test", "0912345603");
+    }
+
+    private User administrator() {
+        Role role = new Role();
+        role.setName("ADMINISTRATOR");
+        entityManager.persist(role);
+        User admin = account("Administrator", "decision-admin@example.test", "0912345699");
+        admin.setRole(role);
+        return admin;
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"DISMISS", "FLAG", "SUSPEND", "BAN"})
+    void decisionUpdatesCaseAccountAndAuditsAtomically(String rawDecision) {
+        User admin = administrator();
+        AbuseFlag pending = flag(target, "PENDING", NOW);
+        Long caseId = pending.getId();
+        UserPrincipal principal = UserPrincipal.create(admin);
+        flushAndClear();
+        var decision = AbuseEscalationDecision.valueOf(rawDecision);
+        var result = service.decideEscalation(caseId, new DecideAbuseEscalationRequest(decision,
+                "  Đã đối chiếu đầy đủ bằng chứng liên quan tới hành vi lạm dụng.  "), principal);
+        entityManager.flush();
+        assertThat(result.getStatus()).isEqualTo(decision == AbuseEscalationDecision.DISMISS
+                ? AbuseFlagStatus.DISMISSED : AbuseFlagStatus.OPEN);
+        String expectedStatus = switch (decision) {
+            case SUSPEND -> "SUSPENDED";
+            case BAN -> "BANNED";
+            default -> "ACTIVE";
+        };
+        assertThat(result.getUserStatus()).isEqualTo(expectedStatus);
+        var audits = entityManager.createQuery("select a from AuditLog a where a.entityType = 'ABUSE_FLAG' and a.entityId = :id", AuditLog.class)
+                .setParameter("id", caseId).getResultList();
+        assertThat(audits).singleElement().satisfies(audit -> {
+            assertThat(audit.getActorUser().getId()).isEqualTo(principal.getId());
+            assertThat(audit.getAction()).isEqualTo("DECIDE_ABUSE_ESCALATION_" + rawDecision);
+            assertThat(audit.getReason()).doesNotStartWith(" ").doesNotEndWith(" ");
+        });
+        assertThatThrownBy(() -> service.decideEscalation(caseId,
+                new DecideAbuseEscalationRequest(decision, "Đã đối chiếu đầy đủ bằng chứng liên quan."), principal))
+                .isInstanceOf(AbuseEscalationConflictException.class);
+    }
+
+    @Test
+    void suspendNeverDowngradesBannedAccount() {
+        User admin = administrator();
+        target.setStatus("BANNED");
+        AbuseFlag pending = flag(target, "PENDING", NOW);
+        UserPrincipal principal = UserPrincipal.create(admin);
+        flushAndClear();
+        assertThatThrownBy(() -> service.decideEscalation(pending.getId(),
+                new DecideAbuseEscalationRequest(AbuseEscalationDecision.SUSPEND, "Đã xác minh đủ bằng chứng liên quan."), principal))
+                .isInstanceOf(AbuseEscalationConflictException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"DISMISS", "FLAG"})
+    void nonRestrictiveDecisionPreservesExistingBan(String decision) {
+        User admin = administrator();
+        target.setStatus("BANNED");
+        AbuseFlag pending = flag(target, "PENDING", NOW);
+        UserPrincipal principal = UserPrincipal.create(admin);
+        flushAndClear();
+        var result = service.decideEscalation(pending.getId(),
+                new DecideAbuseEscalationRequest(AbuseEscalationDecision.valueOf(decision), "Đã xác minh đủ bằng chứng liên quan."), principal);
+        assertThat(result.getUserStatus()).isEqualTo("BANNED");
+    }
+
+    @Test
+    void adminCannotSuspendSelf() {
+        User admin = administrator();
+        AbuseFlag pending = flag(admin, "PENDING", NOW);
+        UserPrincipal principal = UserPrincipal.create(admin);
+        flushAndClear();
+        assertThatThrownBy(() -> service.decideEscalation(pending.getId(),
+                new DecideAbuseEscalationRequest(AbuseEscalationDecision.BAN, "Đã xác minh đủ bằng chứng liên quan."), principal))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void rejectsReasonThatIsTooShortAfterStripping() {
+        User admin = administrator();
+        AbuseFlag pending = flag(target, "PENDING", NOW);
+        assertThatThrownBy(() -> service.decideEscalation(pending.getId(),
+                new DecideAbuseEscalationRequest(AbuseEscalationDecision.FLAG, "                     ngắn "), UserPrincipal.create(admin)))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"OPEN", "DISMISSED", "RESOLVED"})
+    void onlyPendingCaseCanReceiveDecision(String status) {
+        User admin = administrator();
+        AbuseFlag selected = flag(target, status, NOW);
+        UserPrincipal principal = UserPrincipal.create(admin);
+        flushAndClear();
+        assertThatThrownBy(() -> service.decideEscalation(selected.getId(),
+                new DecideAbuseEscalationRequest(AbuseEscalationDecision.FLAG, "Đã xác minh đủ bằng chứng liên quan."), principal))
+                .isInstanceOf("RESOLVED".equals(status) ? ResourceNotFoundException.class : AbuseEscalationConflictException.class);
     }
 
     @Test

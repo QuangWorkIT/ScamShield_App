@@ -1,6 +1,11 @@
 package com.be.scamshield.controller;
 
 import com.be.scamshield.dto.BaseResponse;
+import com.be.scamshield.dto.request.DecideAbuseEscalationRequest;
+import com.be.scamshield.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import com.be.scamshield.dto.PaginatedResponse;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationDetailResponse;
 import com.be.scamshield.dto.admin.AdminAbuseEscalationFilterRequest;
@@ -30,6 +35,19 @@ import org.springframework.web.bind.annotation.PathVariable;
 public class AdminAbuseEscalationController {
 
     private final IAdminAbuseEscalationService adminAbuseEscalationService;
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Quyết định xử lý hồ sơ lạm dụng tài khoản",
+            description = "Chỉ xử lý hồ sơ PENDING một lần. DISMISS chuyển sang DISMISSED; FLAG, SUSPEND, BAN chuyển sang OPEN. "
+                    + "SUSPEND/BAN đổi trạng thái tài khoản, không tự mở lại tài khoản bị hạn chế. "
+                    + "Tạm khóa cần quản trị viên mở lại thủ công. Mọi quyết định và thay đổi tài khoản được lưu audit trong cùng giao dịch. "
+                    + "Trả 409 nếu hồ sơ đã xử lý hoặc quyết định làm giảm mức hạn chế hiện tại.")
+    public ResponseEntity<BaseResponse<AdminAbuseEscalationResponse>> decideEscalation(
+            @PathVariable Long id, @Valid @RequestBody DecideAbuseEscalationRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        return ResponseEntity.ok(new BaseResponse<>(true, "Đã lưu quyết định xử lý hồ sơ lạm dụng",
+                adminAbuseEscalationService.decideEscalation(id, request, currentUser)));
+    }
 
     @GetMapping("/{id}")
     @Operation(summary = "Lấy chi tiết hồ sơ lạm dụng tài khoản",
