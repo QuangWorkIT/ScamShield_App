@@ -1,5 +1,7 @@
 package com.be.scamshield.serviceImpl;
 
+import com.be.scamshield.external.SupabaseStorageService;
+
 import com.be.scamshield.constant.EvidenceVerificationStatus;
 import com.be.scamshield.constant.DisputeIndicatorType;
 import com.be.scamshield.constant.DisputePriority;
